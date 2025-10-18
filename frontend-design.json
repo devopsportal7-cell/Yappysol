@@ -1,0 +1,205 @@
+{
+  "design_system": {
+    "style": {
+      "color_palette": {
+        "background": "#000000",
+        "primary_text": "#FFFFFF",
+        "secondary_text": "#A0A0A0",
+        "accent_primary": "#F6C945",
+        "accent_secondary": "#FF6F3C",
+        "card_background": "#111111",
+        "divider": "rgba(255,255,255,0.05)"
+      },
+      "typography": {
+        "font_family": "Inter, sans-serif",
+        "heading_weights": [700, 800],
+        "body_weights": [400, 500],
+        "line_height": {
+          "heading": 1.2,
+          "body": 1.6
+        },
+        "scale": {
+          "h1": "48px",
+          "h2": "36px",
+          "h3": "28px",
+          "body_large": "18px",
+          "body": "16px",
+          "caption": "14px"
+        },
+        "text_transform": "none"
+      },
+      "shapes": {
+        "border_radius": "12px",
+        "card_radius": "16px",
+        "button_radius": "8px"
+      },
+      "effects": {
+        "shadow_light": "0px 2px 6px rgba(0,0,0,0.3)",
+        "shadow_heavy": "0px 4px 12px rgba(0,0,0,0.5)",
+        "hover_scale": 1.03
+      },
+      "iconography": {
+        "style": "thin line + minimal fill",
+        "sizes": {
+          "small": 16,
+          "medium": 24,
+          "large": 40
+        }
+      }
+    },
+    "layout": {
+      "grid_system": {
+        "container_max_width": "1280px",
+        "columns": 12,
+        "gutters": "24px",
+        "card_spacing": "32px"
+      },
+      "section_structure": [
+        {
+          "name": "Hero",
+          "elements": ["navbar", "tagline", "headline", "subheadline", "CTA_buttons", "mockup_image"],
+          "alignment": "center",
+          "padding_y": "96px"
+        },
+        {
+          "name": "Metrics_Bar",
+          "elements": ["metric_item (icon + number + label)"],
+          "layout": "horizontal",
+          "background": "transparent"
+        },
+        {
+          "name": "Feature_Cards",
+          "elements": ["icon", "title", "description"],
+          "columns": 3,
+          "card_background": "dark_elevated",
+          "padding": "32px"
+        },
+        {
+          "name": "Trading_UI_Mockup",
+          "elements": ["screenshot_mockup", "feature_highlights"],
+          "background": "#000000",
+          "padding_y": "80px"
+        },
+        {
+          "name": "Partners_Logos",
+          "elements": ["logo_carousel"],
+          "alignment": "center",
+          "padding_y": "64px"
+        },
+        {
+          "name": "Roadmap",
+          "elements": ["version_badge", "title", "description", "timeline_steps"],
+          "layout": "horizontal_cards",
+          "card_style": "glass_dark"
+        },
+        {
+          "name": "Press_Section",
+          "elements": ["media_logo", "quote_card"],
+          "columns": 3
+        },
+        {
+          "name": "Footer_CTA",
+          "elements": ["headline", "CTA_button", "social_links"],
+          "background": "#000000",
+          "padding_y": "64px"
+        }
+      ],
+      "spacing_scale": {
+        "xs": "8px",
+        "sm": "16px",
+        "md": "24px",
+        "lg": "48px",
+        "xl": "80px"
+      },
+      "alignment_rules": {
+        "default_text_alignment": "left",
+        "metrics_and_icons": "centered",
+        "hero_section": "center"
+      }
+    },
+    "components": {
+      "navbar": {
+        "position": "sticky_top",
+        "background": "transparent_with_blur",
+        "items": ["logo", "nav_links", "CTA_button"],
+        "cta_variant": "primary_accent"
+      },
+      "button": {
+        "variants": {
+          "primary": {
+            "background": "linear-gradient(90deg, #F6C945, #FF6F3C)",
+            "text_color": "#000",
+            "hover_effect": "brightness(1.1)"
+          },
+          "secondary": {
+            "background": "transparent",
+            "border": "1px solid rgba(255,255,255,0.15)",
+            "text_color": "#FFFFFF"
+          }
+        },
+        "size": {
+          "large": { "padding": "16px 32px", "font_size": "18px" },
+          "medium": { "padding": "12px 24px", "font_size": "16px" }
+        }
+      },
+      "card": {
+        "background": "rgba(255,255,255,0.02)",
+        "border_radius": "16px",
+        "padding": "24px",
+        "hover_effect": "border_accent_glow"
+      },
+      "mockup_showcase": {
+        "shadow": "0px 10px 40px rgba(0,0,0,0.5)",
+        "max_width": "1000px",
+        "border_radius": "12px"
+      },
+      "metrics": {
+        "style": "large_number + label",
+        "number_weight": 700,
+        "accent_color": "#F6C945"
+      },
+      "logo_grid": {
+        "layout": "auto_fit",
+        "gap": "32px",
+        "logo_opacity": 0.8
+      },
+      "roadmap_card": {
+        "version_badge_color": "#F6C945",
+        "background": "rgba(255,255,255,0.03)",
+        "timeline_line": "dashed_accent"
+      },
+      "press_card": {
+        "background": "rgba(255,255,255,0.02)",
+        "padding": "24px",
+        "border_radius": "12px",
+        "hover_effect": "slight_scale"
+      },
+      "footer": {
+        "background": "#000000",
+        "links_style": "muted_white",
+        "social_icons": "line_white_hover_accent"
+      }
+    },
+    "motion": {
+      "transitions": {
+        "duration": "300ms",
+        "easing": "cubic-bezier(0.4, 0, 0.2, 1)"
+      },
+      "animations": {
+        "hover_buttons": "scale_up + shadow_glow",
+        "card_hover": "slight_lift",
+        "section_entrance": "fade_up"
+      }
+    },
+    "tone": {
+      "brand_feel": [
+        "modern",
+        "premium",
+        "tech-focused",
+        "sleek",
+        "minimal but bold",
+        "dark-mode native"
+      ]
+    }
+  }
+}
