@@ -1,0 +1,368 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* BONK Color Palette - Vibrant Orange, Purple, and Yellow Theme */
+    --background: 222 84% 4%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 84% 6%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 84% 4%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary Colors - BONK Orange */
+    --primary: 25 100% 55%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Secondary Colors - BONK Orange Variants */
+    --secondary: 25 80% 50%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 25% 27%;
+    --muted-foreground: 215 25% 65%;
+
+    /* Accent Colors - BONK Yellow */
+    --accent: 45 100% 60%;
+    --accent-foreground: 222 84% 4%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 25 100% 55%;
+
+    --radius: 0.75rem;
+  }
+
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222 84% 4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 84% 4%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 84% 4%;
+
+    --primary: 25 100% 55%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 25 80% 50%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 25% 25%;
+
+    --accent: 45 100% 60%;
+    --accent-foreground: 222 84% 4%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 25 100% 55%;
+  }
+
+  .dark {
+    --background: 222 84% 4%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 84% 6%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 84% 4%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 25 100% 55%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 25 80% 50%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 25% 27%;
+    --muted-foreground: 215 25% 65%;
+
+    --accent: 45 100% 60%;
+    --accent-foreground: 222 84% 4%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 25 100% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 80px; /* Account for fixed navbar */
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
+    min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .dark body {
+    background: linear-gradient(135deg, #0a0a0f 0%, #1a0f1e 50%, #1e1620 100%);
+  }
+
+  /* Section scroll margin for fixed navbar */
+  section[id] {
+    scroll-margin-top: 80px;
+  }
+
+  /* BONK Gradient Text - Heavy Orange Focus */
+  .gradient-text {
+    background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 50%, #ff6b35 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* BONK Glow Effects */
+  .glow {
+    box-shadow: 0 0 30px rgba(255, 107, 53, 0.4);
+  }
+
+  .glow-sm {
+    box-shadow: 0 0 15px rgba(255, 107, 53, 0.3);
+  }
+
+  .glow-orange {
+    box-shadow: 0 0 30px rgba(255, 107, 53, 0.4);
+  }
+
+  .glow-yellow {
+    box-shadow: 0 0 30px rgba(251, 191, 36, 0.4);
+  }
+
+  /* BONK Button Styles - Heavy Orange */
+  .btn-primary {
+    @apply rounded-xl bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 text-white font-semibold hover:opacity-90 hover:scale-105 transition-all duration-300 hover:glow;
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  .btn-secondary {
+    @apply rounded-xl bg-transparent border-2 border-orange-500/30 text-gray-900 dark:text-white font-semibold hover:bg-orange-500/10 hover:border-orange-500/50 hover:scale-105 transition-all duration-300 hover:glow-sm;
+  }
+  
+  .btn-outline {
+    @apply rounded-xl bg-transparent border-2 border-orange-500/30 text-orange-500 font-semibold hover:bg-orange-500/10 hover:border-orange-500/50 hover:scale-105 transition-all duration-300;
+  }
+
+  /* Modern Card Styles */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 107, 53, 0.1);
+    border-radius: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .dark .glass-card {
+    background: rgba(30, 30, 46, 0.8);
+    border: 1px solid rgba(255, 107, 53, 0.1);
+  }
+
+  .neo-card {
+    background: rgba(248, 250, 252, 0.6);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 107, 53, 0.15);
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .dark .neo-card {
+    background: rgba(10, 10, 15, 0.6);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Gradient Border */
+  .gradient-border {
+    position: relative;
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(135deg, #ff6b35, #ff8c42, #ff6b35);
+    z-index: -1;
+    border-radius: 1rem;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  /* Animations */
+  @keyframes gradient-shift {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  .animation-delay-800 {
+    animation-delay: 800ms;
+  }
+
+  /* Enhanced Particle Background */
+  .particle-bg {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: -1;
+  }
+
+  .particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b35, #00ffff);
+    animation: float 20s infinite ease-in-out;
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0) translateX(0);
+      opacity: 0;
+    }
+    25% {
+      opacity: 0.6;
+    }
+    50% {
+      transform: translateY(-30px) translateX(15px);
+      opacity: 1;
+    }
+    75% {
+      opacity: 0.6;
+    }
+  }
+  
+  /* Ambient Animation */
+  @keyframes ambient-float {
+    0%, 100% {
+      transform: translateY(0) translateX(0);
+      opacity: 0.2;
+    }
+    50% {
+      transform: translateY(-20px) translateX(15px);
+      opacity: 0.5;
+    }
+  }
+  
+  [class*="ambient-dot"] {
+    animation: ambient-float 20s infinite ease-in-out;
+  }
+
+  /* Modern Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 107, 53, 0.1);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #ff6b35, #ff1493);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #ff8c42, #ff69b4);
+  }
+
+  #root {
+    width: 100%;
+    margin: 0 auto;
+    text-align: center;
+    background: transparent;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  *:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.5);
+  }
+
+  ::selection {
+    background: rgba(255, 107, 53, 0.3);
+    color: white;
+  }
+
+  .font-display {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 700;
+  }
+
+  .font-body {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 400;
+  }
+
+  @media (max-width: 768px) {
+    html {
+      scroll-padding-top: 64px; /* Smaller offset for mobile */
+    }
+    
+    section[id] {
+      scroll-margin-top: 64px;
+    }
+    
+    .glass-card {
+      backdrop-filter: blur(10px);
+    }
+    
+    .neo-card {
+      backdrop-filter: blur(8px);
+    }
+  }
+}

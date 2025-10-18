@@ -1,0 +1,107 @@
+div.markdown-body img,
+.markdown-body > img,
+.markdown-body p > img {
+  max-width: 64px !important;
+  max-height: 64px !important;
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: 8px !important;
+  margin-bottom: 8px !important;
+  display: inline-block !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  object-fit: contain !important;
+  vertical-align: middle !important;
+}
+
+.token-row {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #1e0f1e 60%, #2d1a1a 100%);
+  border-radius: 18px;
+  padding: 18px 24px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 24px rgba(255,107,53,0.10), 0 1.5px 6px rgba(0,0,0,0.10);
+  transition: box-shadow 0.2s, background 0.2s, transform 0.15s;
+  border: 1.5px solid #2d1a1a;
+  gap: 20px;
+}
+.token-row:hover {
+  background: linear-gradient(135deg, #2d1a1a 60%, #1e0f1e 100%);
+  box-shadow: 0 8px 32px rgba(255,107,53,0.18), 0 2px 8px rgba(0,0,0,0.13);
+  transform: translateY(-2px) scale(1.012);
+}
+.token-row img {
+  width: 72px !important;
+  height: 72px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 3px solid #ff6b35;
+  box-shadow: 0 2px 12px rgba(255,107,53,0.10);
+  background: #1e0f1e;
+}
+.token-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.token-symbol {
+  font-weight: 800;
+  font-size: 1.35em;
+  color: #fff;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.token-price {
+  color: #a5b4fc;
+  font-size: 1.08em;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.token-price a {
+  color: #ff6b35;
+  text-decoration: underline;
+  margin-left: 10px;
+  font-weight: 600;
+  font-size: 0.98em;
+}
+.token-mint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 0.93em;
+  color: #b6b6d6;
+}
+.mint-address {
+  font-family: 'JetBrains Mono', 'Fira Mono', 'Menlo', monospace;
+  background: rgba(255,107,53,0.08);
+  padding: 2px 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  font-size: 0.98em;
+  color: #ffd7cc;
+  border: 1px solid #2d1a1a;
+}
+.copy-btn {
+  background: linear-gradient(90deg, #ff6b35 0%, #ff8c42 100%);
+  border: none;
+  color: #fff;
+  padding: 2px 14px;
+  border-radius: 6px;
+  font-size: 0.93em;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(255,107,53,0.10);
+  transition: background 0.2s, color 0.2s, transform 0.12s;
+  outline: none;
+}
+.copy-btn:hover, .copy-btn:focus {
+  background: linear-gradient(90deg, #a5b4fc 0%, #7c3aed 100%);
+  color: #18122b;
+  transform: scale(1.06);
+}
+.copy-btn:active {
+  transform: scale(0.97);
+} 
