@@ -1,6 +1,6 @@
-# Soltikka Advisor Mode Implementation Documentation
+# Yappysol Advisor Mode Implementation Documentation
 
-**Project:** Soltikka - Solana AI Copilot  
+**Project:** Yappysol - Solana AI Copilot  
 **Feature:** Advisor Mode for Token Research and Comparison  
 **Implementation Date:** December 19, 2024  
 **Status:** ✅ Completed and Ready for Testing
@@ -9,7 +9,7 @@
 
 ## Overview
 
-The Advisor Mode feature adds powerful token research and comparison capabilities to the Soltikka platform. It provides users with AI-powered investment insights, token analysis, and buy/sell recommendations while maintaining educational disclaimers and ensuring no automatic transaction execution.
+The Advisor Mode feature adds powerful token research and comparison capabilities to the Yappysol platform. It provides users with AI-powered investment insights, token analysis, and buy/sell recommendations while maintaining educational disclaimers and ensuring no automatic transaction execution.
 
 ## Key Features Implemented
 

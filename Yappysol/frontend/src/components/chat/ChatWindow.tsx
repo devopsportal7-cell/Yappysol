@@ -76,7 +76,7 @@ const ChatWindow = () => {
       <header className="border-b border-orange-500/20 p-3 md:p-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/lovable-uploads/tikka-logo-text.png.png" alt="Tikka" className="h-6 w-6 md:h-7 md:w-7" />
+            <img src="/lovable-uploads/tikka-logo-text.png.png" alt="Yappysol" className="h-6 w-6 md:h-7 md:w-7" />
           </div>
           <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400 bg-orange-500/10 px-2 sm:px-3 py-1 rounded-full truncate">
             <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0"></div>
@@ -95,7 +95,7 @@ const ChatWindow = () => {
               >
                 {!msg.isUser && (
                   <Avatar className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0">
-                    <img src="/lovable-uploads/tikka-logo-abstract.png.png" alt="Tikka" className="h-full w-full rounded-full" />
+                    <img src="/lovable-uploads/tikka-logo-abstract.png.png" alt="Yappysol" className="h-full w-full rounded-full" />
                     <AvatarFallback className="bg-orange-500/20 text-orange-500 text-xs">TK</AvatarFallback>
                   </Avatar>
                 )}

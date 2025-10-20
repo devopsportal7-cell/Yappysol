@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
+import * as THREE from 'node_modules/@types/three';
 
 type DottedSurfaceProps = Omit<React.ComponentProps<'div'>, 'ref'>;
 

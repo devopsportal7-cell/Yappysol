@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const TikkaWalkthroughSection = () => {
+const YappysolWalkthroughSection = () => {
   const [activeStep, setActiveStep] = useState(1);
 
   const steps = [
@@ -18,7 +18,7 @@ const TikkaWalkthroughSection = () => {
     {
       number: 2,
       title: "Ask Anything",
-      description: "Swap tokens, track wallets, launch coins — just type it. Tikka understands.",
+      description: "Swap tokens, track wallets, launch coins — just type it. Yappysol understands.",
       mockup: {
         label: "Chat Interface",
         image: "https://images.unsplash.com/photo-1577563908411-5077b6dc7624?w=800&h=600&fit=crop&crop=center&auto=format&q=80",
@@ -79,7 +79,7 @@ const TikkaWalkthroughSection = () => {
   };
 
   return (
-    <section id="Tikka-walkthrough" className="py-24 md:py-32 bg-[#0C0C0C] overflow-hidden">
+    <section id="yappysol-walkthrough" className="py-24 md:py-32 bg-[#0C0C0C] overflow-hidden">
       <div className="container max-w-7xl mx-auto px-6">
         <motion.div
           variants={containerVariants}
@@ -156,7 +156,7 @@ const TikkaWalkthroughSection = () => {
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 </div>
                 <div className="text-[#A0A0A0] text-sm font-mono ml-4">
-                  Tikka - Step {activeStep}
+                  Yappysol - Step {activeStep}
                 </div>
               </div>
 
@@ -222,7 +222,8 @@ const TikkaWalkthroughSection = () => {
   );
 };
 
-export default TikkaWalkthroughSection;
+export default YappysolWalkthroughSection;
+
 
 
 

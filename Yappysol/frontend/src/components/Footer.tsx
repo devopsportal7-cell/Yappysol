@@ -21,7 +21,7 @@ const Footer = () => {
               Built on Solana. Trained on vibes.
             </h3>
             <p className="text-lg text-gray-300 max-w-3xl mx-auto">
-              Tikka is the AI copilot for crypto conversations.
+              Yappysol is the AI copilot for crypto conversations.
             </p>
           </motion.div>
         </div>
@@ -32,7 +32,7 @@ const Footer = () => {
           <div className="lg:col-span-2">
             <div className="mb-6">
               <h3 className="text-[28px] font-bold text-white mb-4">
-                Tikka
+                Yappysol
               </h3>
               <p className="text-[16px] text-[#A0A0A0] leading-[1.6] max-w-md">
                 Your command line for Solana, powered by AI. Trade, launch, and manage your portfolio through intuitive chat commands.

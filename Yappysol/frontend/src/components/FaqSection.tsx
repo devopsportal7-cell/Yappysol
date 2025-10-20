@@ -4,28 +4,28 @@ import { ChevronDown } from "lucide-react";
 
 const faqs = [
   {
-    question: "How secure is Tikka?",
-    answer: "Tikka uses end-to-end encryption and never stores your private keys. All transactions are signed locally in your browser, and we use industry-standard security practices to protect your data."
+    question: "How secure is Yappysol?",
+    answer: "Yappysol uses end-to-end encryption and never stores your private keys. All transactions are signed locally in your browser, and we use industry-standard security practices to protect your data."
   },
   {
     question: "Which wallets are supported?",
-    answer: "Tikka supports all major Solana wallets including Phantom, Solflare, Backpack, and more. You can also import private keys securely for direct wallet management."
+    answer: "Yappysol supports all major Solana wallets including Phantom, Solflare, Backpack, and more. You can also import private keys securely for direct wallet management."
   },
   {
-    question: "What can I do with Tikka?",
+    question: "What can I do with Yappysol?",
     answer: "You can swap tokens, launch new projects on Pump.fun, track your portfolio, analyze market sentiment, manage multiple wallets, and get AI-powered insights about your investments."
   },
   {
     question: "Is there a mobile app?",
-    answer: "Tikka is currently web-based and works great on mobile browsers. We're working on native mobile apps for iOS and Android."
+    answer: "Yappysol is currently web-based and works great on mobile browsers. We're working on native mobile apps for iOS and Android."
   },
   {
     question: "How does the AI chat work?",
-    answer: "Our AI understands natural language commands and translates them into Solana operations. Just type what you want to do, and Tikka handles the technical details."
+    answer: "Our AI understands natural language commands and translates them into Solana operations. Just type what you want to do, and Yappysol handles the technical details."
   },
   {
     question: "Are there any fees?",
-    answer: "Tikka is free to use. You only pay standard Solana network fees for transactions, which are typically less than $0.01."
+    answer: "Yappysol is free to use. You only pay standard Solana network fees for transactions, which are typically less than $0.01."
   }
 ];
 
@@ -49,7 +49,7 @@ const FaqSection = () => {
             Frequently asked questions
           </h2>
           <p className="text-[18px] text-[#A0A0A0] max-w-2xl mx-auto leading-[1.6]">
-            Everything you need to know about Tikka and how it works.
+            Everything you need to know about Yappysol and how it works.
           </p>
         </div>
 

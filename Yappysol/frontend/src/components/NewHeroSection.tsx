@@ -31,7 +31,7 @@ const NewHeroSection = () => {
 
         {/* Subheadline */}
         <p className="text-[16px] lg:text-[20px] text-white mb-16 leading-[1.2] max-w-3xl mx-auto font-space font-light">
-          Alpha, swaps, tokens, even coin launches - just ask. Tikka handles the rest.
+          Alpha, swaps, tokens, even coin launches - just ask. Yappysol handles the rest.
         </p>
 
         {/* CTA Buttons */}
@@ -67,7 +67,7 @@ const NewHeroSection = () => {
                     <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                     <div className="w-3 h-3 rounded-full bg-green-500"></div>
                   </div>
-                  <div className="text-[#A0A0A0] text-sm font-mono">Tikka Trading Interface</div>
+                  <div className="text-[#A0A0A0] text-sm font-mono">Yappysol Trading Interface</div>
                   <div className="w-8"></div>
                 </div>
               </div>
@@ -85,6 +85,7 @@ const NewHeroSection = () => {
 };
 
 export default NewHeroSection;
+
 
 
 

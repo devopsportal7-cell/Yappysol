@@ -81,7 +81,7 @@ const ChatSidebar = ({ onClose, collapsed: collapsedProp, onToggleCollapse }: Ch
           >
             <div className="flex items-center gap-3 group-hover:scale-105 transition-transform duration-200">
               <div className="w-20 h-16 bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-xl shadow-orange-500/25">
-                <img src="/lovable-uploads/tikka-logo-text.png.png" alt="Tikka" className="h-14 w-18 object-contain" />
+                <img src="/lovable-uploads/tikka-logo-text.png.png" alt="Yappysol" className="h-14 w-18 object-contain" />
               </div>
             </div>
           </a>

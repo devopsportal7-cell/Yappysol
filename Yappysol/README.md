@@ -1,8 +1,8 @@
-# 🚀 Soltikka - Solana AI Copilot
+# 🚀 Yappysol - Solana AI Copilot
 
-**Soltikka** is an AI-powered Solana assistant that enables users to perform DeFi operations through natural language conversations. Built with React, TypeScript, and Node.js, it provides an intuitive chat interface for token creation, swapping, portfolio management, and more.
+**Yappysol** is an AI-powered Solana assistant that enables users to perform DeFi operations through natural language conversations. Built with React, TypeScript, and Node.js, it provides an intuitive chat interface for token creation, swapping, portfolio management, and more.
 
-![Soltikka Logo](frontend/public/lovable-uploads/tikka-logo-abstract.png.png)
+![Yappysol Logo](frontend/public/lovable-uploads/yappysol-logo-abstract.png.png)
 
 ## ✨ Features
 
@@ -61,8 +61,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Jbgabreal/tikka.git
-   cd tikka
+   git clone https://github.com/devopsportal7-cell/Yappysol.git
+   cd Yappysol
    ```
 
 2. **Install dependencies**
@@ -121,7 +121,7 @@
 ## 📁 Project Structure
 
 ```
-tikka/
+Yappysol/
 ├── backend/                 # Node.js/Express backend
 │   ├── src/
 │   │   ├── routes/         # API endpoints

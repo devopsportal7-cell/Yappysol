@@ -4,7 +4,7 @@ import MetricsSection from "@/components/MetricsSection";
 import FeaturesGrid from "@/components/FeaturesGrid";
 import TradingIntelligenceSection from "@/components/TradingIntelligenceSection";
 import DeFiAnalyticsSection from "@/components/DeFiAnalyticsSection";
-import TikkaWalkthroughSection from "@/components/TikkaWalkthroughSection";
+import YappysolWalkthroughSection from "@/components/TikkaWalkthroughSection";
 import VollAheadSection from "@/components/VollAheadSection";
 import HowItWorks from "@/components/HowItWorks";
 import SmartRoutinesSection from "@/components/SmartRoutinesSection";
@@ -26,7 +26,7 @@ const Index = () => {
         <NewHeroSection />
         <MetricsSection />
         <FeaturesGrid />
-        <TikkaWalkthroughSection />
+        <YappysolWalkthroughSection />
         <TradingIntelligenceSection />
         <DeFiAnalyticsSection />
         <VollAheadSection />

@@ -1,7 +1,7 @@
-# Tikka Backend API Documentation
+# Yappysol Backend API Documentation
 
 ## Overview
-Tikka is a Solana AI copilot backend that provides authentication, chat functionality, token operations, portfolio management, and transaction tracking. This document outlines all available endpoints, request/response formats, and integration requirements for frontend development.
+Yappysol is a Solana AI copilot backend that provides authentication, chat functionality, token operations, portfolio management, and transaction tracking. This document outlines all available endpoints, request/response formats, and integration requirements for frontend development.
 
 ## Base URL
 ```

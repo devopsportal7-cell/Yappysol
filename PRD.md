@@ -1,17 +1,17 @@
 # Product Requirements Document (PRD)
-## Soltikka - Solana AI Copilot
+## Yappysol - Solana AI Copilot
 
 **Version:** 1.0  
 **Date:** December 2024  
-**Project:** Soltikka  
-**Repository:** https://github.com/Jbgabreal/tikka.git
+**Project:** Yappysol  
+**Repository:** https://github.com/devopsportal7-cell/Yappysol.git
 
 ---
 
 ## 1. Executive Summary
 
 ### 1.1 Product Vision
-Soltikka is an AI-powered Solana assistant that enables users to perform DeFi operations through natural language conversations. The platform democratizes access to Solana's DeFi ecosystem by providing an intuitive chat interface for complex blockchain operations.
+Yappysol is an AI-powered Solana assistant that enables users to perform DeFi operations through natural language conversations. The platform democratizes access to Solana's DeFi ecosystem by providing an intuitive chat interface for complex blockchain operations.
 
 ### 1.2 Product Mission
 To make Solana DeFi accessible to everyone through conversational AI, eliminating technical barriers and enabling users to interact with blockchain protocols using natural language.

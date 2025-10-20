@@ -13,7 +13,7 @@ const BuiltDifferentSection = () => {
     {
       icon: "blocks",
       title: "Composable & Open",
-      description: "Plug Tikka into your bots, apps, or workflows.",
+      description: "Plug Yappysol into your bots, apps, or workflows.",
       mockup: { value: "API Ready", change: "Open", changeColor: "text-blue-400" }
     },
     {
@@ -93,6 +93,7 @@ const BuiltDifferentSection = () => {
 };
 
 export default BuiltDifferentSection;
+
 
 
 

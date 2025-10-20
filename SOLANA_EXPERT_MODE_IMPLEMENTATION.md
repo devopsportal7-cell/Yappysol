@@ -1,6 +1,6 @@
 # Solana Expert Mode Implementation Documentation
 
-**Project:** Soltikka - Solana AI Copilot  
+**Project:** Yappysol - Solana AI Copilot  
 **Feature:** Solana Expert Mode for Blockchain Analysis and Education  
 **Implementation Date:** December 19, 2024  
 **Status:** ✅ Completed and Ready for Testing
@@ -9,7 +9,7 @@
 
 ## Overview
 
-The Solana Expert Mode feature adds comprehensive Solana/SPL blockchain expertise to the Soltikka platform. It provides users with detailed transaction analysis, account explanations, and educational content about Solana's ecosystem while maintaining educational focus and read-only operations.
+The Solana Expert Mode feature adds comprehensive Solana/SPL blockchain expertise to the Yappysol platform. It provides users with detailed transaction analysis, account explanations, and educational content about Solana's ecosystem while maintaining educational focus and read-only operations.
 
 ## Key Features Implemented
 

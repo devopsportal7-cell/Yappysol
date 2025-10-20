@@ -1,6 +1,6 @@
-# Soltikka Advisor Mode — One‑Shot Cursor Prompt (Markdown)
+# Yappysol Advisor Mode — One‑Shot Cursor Prompt (Markdown)
 
-This is a single, copy‑paste **master prompt** you can give to **Cursor** to implement the *Advisor Mode* feature in Soltikka without breaking existing flows. It uses **additive changes only** (new files + tiny hooks), reuses your existing data sources, and preserves current chat functionality.
+This is a single, copy‑paste **master prompt** you can give to **Cursor** to implement the *Advisor Mode* feature in Yappysol without breaking existing flows. It uses **additive changes only** (new files + tiny hooks), reuses your existing data sources, and preserves current chat functionality.
 
 ---
 
