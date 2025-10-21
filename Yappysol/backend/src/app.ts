@@ -22,9 +22,9 @@ moralisService.initialize().catch(error => {
 });
 
 app.use(express.json());
-const corsOrigin = process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
+const corsOrigins = process.env.FRONTEND_BASE_URL?.split(',') || ['http://localhost:3000'];
 app.use(cors({
-  origin: corsOrigin,
+  origin: corsOrigins,
   credentials: true
 }));
 
