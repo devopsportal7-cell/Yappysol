@@ -53,8 +53,30 @@ router.post('/n8n-webhook', asyncHandler(async (req, res) => {
   }
 }));
 
+// Server-to-server authentication middleware for n8n
+const serverAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  const serverKey = process.env.BACKEND_SERVER_KEY;
+  
+  if (!serverKey) {
+    return res.status(500).json({ error: 'Server authentication not configured' });
+  }
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid authorization header' });
+  }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  
+  if (token !== serverKey) {
+    return res.status(401).json({ error: 'Invalid server key' });
+  }
+  
+  next();
+};
+
 // Backend endpoints for n8n to call
-router.post('/chain/launch/seed', authMiddleware, asyncHandler(async (req, res) => {
+router.post('/chain/launch/seed', serverAuthMiddleware, asyncHandler(async (req, res) => {
   const { session_id, user_id, wallet, chain, token } = req.body;
   
   console.log('[BACKEND] Launch seed request:', { session_id, user_id, token });
@@ -73,7 +95,7 @@ router.post('/chain/launch/seed', authMiddleware, asyncHandler(async (req, res) 
   });
 }));
 
-router.post('/chain/launch', authMiddleware, asyncHandler(async (req, res) => {
+router.post('/chain/launch', serverAuthMiddleware, asyncHandler(async (req, res) => {
   const { pending_id, user_id, wallet } = req.body;
   
   console.log('[BACKEND] Launch confirm request:', { pending_id, user_id });
@@ -86,7 +108,7 @@ router.post('/chain/launch', authMiddleware, asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/chain/buy/seed', authMiddleware, asyncHandler(async (req, res) => {
+router.post('/chain/buy/seed', serverAuthMiddleware, asyncHandler(async (req, res) => {
   const { session_id, user_id, wallet, token_symbol, amount } = req.body;
   
   console.log('[BACKEND] Buy seed request:', { session_id, user_id, token_symbol, amount });
@@ -105,7 +127,7 @@ router.post('/chain/buy/seed', authMiddleware, asyncHandler(async (req, res) => 
   });
 }));
 
-router.post('/chain/buy', authMiddleware, asyncHandler(async (req, res) => {
+router.post('/chain/buy', serverAuthMiddleware, asyncHandler(async (req, res) => {
   const { pending_id, user_id, wallet } = req.body;
   
   console.log('[BACKEND] Buy confirm request:', { pending_id, user_id });
@@ -118,7 +140,7 @@ router.post('/chain/buy', authMiddleware, asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/token/portfolio', authMiddleware, asyncHandler(async (req, res) => {
+router.post('/token/portfolio', serverAuthMiddleware, asyncHandler(async (req, res) => {
   const { user_id, wallet } = req.body;
   
   console.log('[BACKEND] Portfolio request:', { user_id, wallet });
