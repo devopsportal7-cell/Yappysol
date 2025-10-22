@@ -6,6 +6,9 @@ export interface User {
   id: string;
   email: string;
   password_hash: string;
+  username?: string | null;
+  onboarding_completed: boolean;
+  username_set_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +23,11 @@ export interface LoginData {
   password: string;
 }
 
+export interface UpdateUserProfileData {
+  username?: string;
+  onboardingCompleted?: boolean;
+}
+
 export class UserModel {
   static async createUser(data: CreateUserData): Promise<User> {
     const id = uuidv4();
@@ -29,6 +37,9 @@ export class UserModel {
       id,
       email: data.email.toLowerCase(),
       password_hash: passwordHash,
+      username: null,
+      onboarding_completed: false,
+      username_set_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -99,6 +110,56 @@ export class UserModel {
 
     if (error) {
       throw new Error(`Failed to update user: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  static async findByUsername(username: string): Promise<User | null> {
+    const { data, error } = await supabase
+      .from(TABLES.USERS)
+      .select('*')
+      .ilike('username', username.toLowerCase())
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No user found
+      }
+      throw new Error(`Failed to find user by username: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  static async isUsernameAvailable(username: string): Promise<boolean> {
+    const user = await this.findByUsername(username);
+    return user === null;
+  }
+
+  static async updateUserProfile(id: string, updates: UpdateUserProfileData): Promise<User | null> {
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (updates.username !== undefined) {
+      updateData.username = updates.username.toLowerCase();
+      updateData.username_set_at = new Date().toISOString();
+    }
+
+    if (updates.onboardingCompleted !== undefined) {
+      updateData.onboarding_completed = updates.onboardingCompleted;
+    }
+
+    const { data, error } = await supabase
+      .from(TABLES.USERS)
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update user profile: ${error.message}`);
     }
 
     return data;

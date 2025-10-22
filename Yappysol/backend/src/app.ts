@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import chatRoutes from './routes/chat';
 import tokenRoutes from './routes/token';
 import authRoutes from './routes/auth';
+import userRoutes from './routes/user';
 import cors from 'cors';
 import trendingTokensRoutes from './routes/trendingTokens';
 import { moralisService } from './lib/moralis';
@@ -22,13 +23,14 @@ moralisService.initialize().catch(error => {
 });
 
 app.use(express.json());
-const corsOrigins = process.env.FRONTEND_BASE_URL?.split(',') || ['http://localhost:3000'];
+const corsOrigin = process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
 app.use(cors({
-  origin: corsOrigins,
+  origin: corsOrigin,
   credentials: true
 }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/token', tokenRoutes);
 app.use('/api/trending-tokens', trendingTokensRoutes);

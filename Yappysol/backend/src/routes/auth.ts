@@ -31,7 +31,10 @@ router.post('/register', asyncHandler(async (req, res) => {
     user: {
       id: result.user!.id,
       email: result.user!.email,
-      createdAt: result.user!.created_at
+      username: result.user!.username || null,
+      onboardingCompleted: result.user!.onboarding_completed || false,
+      createdAt: result.user!.created_at,
+      solBalance: 0
     },
     token: result.token
   });
@@ -56,7 +59,10 @@ router.post('/login', asyncHandler(async (req, res) => {
     user: {
       id: result.user!.id,
       email: result.user!.email,
-      createdAt: result.user!.created_at
+      username: result.user!.username || null,
+      onboardingCompleted: result.user!.onboarding_completed || false,
+      createdAt: result.user!.created_at,
+      solBalance: 0
     },
     token: result.token
   });
@@ -159,7 +165,10 @@ router.post('/privy', asyncHandler(async (req, res) => {
         user: {
           id: result.user!.id,
           email: result.user!.email,
-          createdAt: result.user!.created_at
+          username: result.user!.username || null,
+          onboardingCompleted: result.user!.onboarding_completed || false,
+          createdAt: result.user!.created_at,
+          solBalance: 0
         },
         token: result.token
       });
@@ -185,7 +194,11 @@ router.get('/verify', authMiddleware, asyncHandler(async (req, res) => {
     valid: true,
     user: {
       id: req.user!.id,
-      email: req.user!.email
+      email: req.user!.email,
+      username: req.user!.username || null,
+      onboardingCompleted: req.user!.onboarding_completed || false,
+      createdAt: req.user!.created_at,
+      solBalance: 0
     }
   });
 }));
