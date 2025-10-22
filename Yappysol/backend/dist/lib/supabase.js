@@ -21,5 +21,6 @@ exports.TABLES = {
     USERS: 'users',
     WALLETS: 'wallets',
     CHAT_SESSIONS: 'chat_sessions',
-    API_KEYS: 'api_keys'
+    API_KEYS: 'api_keys',
+    USER_SESSIONS: 'user_sessions'
 };

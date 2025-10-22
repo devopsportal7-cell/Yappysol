@@ -14,7 +14,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
-// Main chat endpoint with intent routing
+// Main chat endpoint with n8n integration
 router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
   console.log('[CHAT] /message endpoint called');
   console.log('[CHAT] Request body:', req.body);
@@ -30,6 +30,48 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
   console.log('[CHAT] Message:', message);
   console.log('[CHAT] Context:', context);
   console.log('[CHAT] Session ID:', sessionId);
+  
+  // Check if n8n integration is enabled
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+  if (n8nWebhookUrl) {
+    console.log('[CHAT] Using n8n integration');
+    
+    try {
+      const response = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.BACKEND_SERVER_KEY}`
+        },
+        body: JSON.stringify({
+          session_id: sessionId || `sess-${userId}-${Date.now()}`,
+          user_id: userId,
+          text: message,
+          walletRef: context.walletAddress || context.wallet?.publicKey || 'default-wallet'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`n8n webhook failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[CHAT] n8n response:', data);
+      
+      return res.json({
+        message: data.message,
+        route: data.route || 'chat',
+        meta: data.meta,
+        session_id: data.session_id || sessionId
+      });
+    } catch (error) {
+      console.error('[CHAT] n8n webhook error:', error);
+      // Fall back to direct backend processing
+    }
+  }
+  
+  // Fallback to direct backend processing if n8n is not available
+  console.log('[CHAT] Using direct backend processing');
   
   try {
     // Add wallet address to context if available

@@ -8,6 +8,7 @@ const authMiddleware_1 = require("../middlewares/authMiddleware");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const ChatService_1 = require("../services/ChatService");
 const TokenCreationService_1 = require("../services/TokenCreationService");
+const ChatSessionSupabase_1 = require("../models/ChatSessionSupabase");
 const multer_1 = __importDefault(require("multer"));
 const router = (0, express_1.Router)();
 // Configure multer for file uploads
@@ -15,7 +16,7 @@ const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
-// Main chat endpoint with intent routing
+// Main chat endpoint with n8n integration
 router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     console.log('[CHAT] /message endpoint called');
     console.log('[CHAT] Request body:', req.body);
@@ -25,9 +26,47 @@ router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
         console.log('[CHAT] No user ID, returning 401');
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    const { message, context } = req.body;
+    const { message, context, sessionId } = req.body;
     console.log('[CHAT] Message:', message);
     console.log('[CHAT] Context:', context);
+    console.log('[CHAT] Session ID:', sessionId);
+    // Check if n8n integration is enabled
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+    if (n8nWebhookUrl) {
+        console.log('[CHAT] Using n8n integration');
+        try {
+            const response = await fetch(n8nWebhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.BACKEND_SERVER_KEY}`
+                },
+                body: JSON.stringify({
+                    session_id: sessionId || `sess-${userId}-${Date.now()}`,
+                    user_id: userId,
+                    text: message,
+                    walletRef: context.walletAddress || context.wallet?.publicKey || 'default-wallet'
+                })
+            });
+            if (!response.ok) {
+                throw new Error(`n8n webhook failed: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log('[CHAT] n8n response:', data);
+            return res.json({
+                message: data.message,
+                route: data.route || 'chat',
+                meta: data.meta,
+                session_id: data.session_id || sessionId
+            });
+        }
+        catch (error) {
+            console.error('[CHAT] n8n webhook error:', error);
+            // Fall back to direct backend processing
+        }
+    }
+    // Fallback to direct backend processing if n8n is not available
+    console.log('[CHAT] Using direct backend processing');
     try {
         // Add wallet address to context if available
         const enhancedContext = {
@@ -36,6 +75,18 @@ router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
             walletAddress: context.walletAddress || context.wallet?.publicKey
         };
         console.log('[CHAT] Enhanced context:', enhancedContext);
+        // Save user message to session if sessionId provided
+        let currentSessionId = sessionId;
+        if (currentSessionId) {
+            const userMessage = {
+                id: `msg-${Date.now()}-user`,
+                content: message,
+                role: 'user',
+                created_at: new Date().toISOString()
+            };
+            await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, userMessage);
+            console.log('[CHAT] Saved user message to session:', currentSessionId);
+        }
         let response;
         // Check if we're in a step flow - this takes priority over intent detection
         if (enhancedContext.currentStep) {
@@ -84,12 +135,25 @@ router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
             };
         }
         console.log('[CHAT] Service response:', response);
+        // Save assistant response to session if sessionId provided
+        if (currentSessionId) {
+            const assistantMessage = {
+                id: `msg-${Date.now()}-assistant`,
+                content: response.prompt || response.message || 'No response',
+                role: 'assistant',
+                action: response.action,
+                created_at: new Date().toISOString()
+            };
+            await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, assistantMessage);
+            console.log('[CHAT] Saved assistant message to session:', currentSessionId);
+        }
         // Return response in the format the frontend expects
         const finalResponse = {
             ...response,
             message: response.prompt || response.message,
             timestamp: new Date().toISOString(),
-            context: enhancedContext
+            context: enhancedContext,
+            sessionId: currentSessionId
         };
         console.log('[CHAT] Final response:', finalResponse);
         res.json(finalResponse);
@@ -145,8 +209,15 @@ router.get('/sessions', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
     if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    // For now, return empty sessions since we're not using database persistence
-    res.json({ sessions: [] });
+    try {
+        const sessions = await ChatSessionSupabase_1.ChatSessionModel.findByUserId(userId);
+        console.log('[CHAT] Found sessions:', sessions.length);
+        res.json({ sessions });
+    }
+    catch (error) {
+        console.error('[CHAT] Error fetching sessions:', error);
+        res.status(500).json({ error: 'Failed to fetch chat sessions' });
+    }
 }));
 // Create a new chat session
 router.post('/sessions', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -155,14 +226,19 @@ router.post('/sessions', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asy
     if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    const { title } = req.body;
-    const session = {
-        id: `chat-${Date.now()}`,
-        title: title || 'New Chat',
-        messages: [],
-        createdAt: new Date().toISOString()
-    };
-    res.json({ session });
+    try {
+        const { title } = req.body;
+        const session = await ChatSessionSupabase_1.ChatSessionModel.createSession({
+            userId,
+            title: title || 'New Chat'
+        });
+        console.log('[CHAT] Created session:', session.id);
+        res.json({ session });
+    }
+    catch (error) {
+        console.error('[CHAT] Error creating session:', error);
+        res.status(500).json({ error: 'Failed to create chat session' });
+    }
 }));
 // Get a specific chat session
 router.get('/sessions/:id', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyncHandler)(async (req, res) => {

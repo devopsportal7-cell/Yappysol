@@ -4,6 +4,7 @@ import chatRoutes from './routes/chat';
 import tokenRoutes from './routes/token';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
+import n8nRoutes from './routes/n8n';
 import cors from 'cors';
 import trendingTokensRoutes from './routes/trendingTokens';
 import { moralisService } from './lib/moralis';
@@ -31,6 +32,7 @@ app.use(cors({
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/n8n', n8nRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/token', tokenRoutes);
 app.use('/api/trending-tokens', trendingTokensRoutes);

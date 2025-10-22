@@ -11,6 +11,9 @@ declare global {
       user?: {
         id?: string;
         email?: string;
+        username?: string | null;
+        onboarding_completed?: boolean;
+        created_at?: string;
         wallet?: string;
         authType?: 'jwt' | 'privy';
       };
@@ -48,6 +51,9 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
         req.user = {
           id: user.id,
           email: user.email,
+          username: user.username,
+          onboarding_completed: user.onboarding_completed,
+          created_at: user.created_at,
           authType: payload.authType || 'jwt'
         };
         next();
@@ -66,6 +72,9 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
           req.user = {
             id: user.id,
             email: user.email,
+            username: user.username,
+            onboarding_completed: user.onboarding_completed,
+            created_at: user.created_at,
             authType: 'privy'
           };
           next();

@@ -15,6 +15,9 @@ class UserModel {
             id,
             email: data.email.toLowerCase(),
             password_hash: passwordHash,
+            username: null,
+            onboarding_completed: false,
+            username_set_at: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
@@ -71,6 +74,46 @@ class UserModel {
             .single();
         if (error) {
             throw new Error(`Failed to update user: ${error.message}`);
+        }
+        return data;
+    }
+    static async findByUsername(username) {
+        const { data, error } = await supabase_1.supabase
+            .from(supabase_1.TABLES.USERS)
+            .select('*')
+            .ilike('username', username.toLowerCase())
+            .single();
+        if (error) {
+            if (error.code === 'PGRST116') {
+                return null; // No user found
+            }
+            throw new Error(`Failed to find user by username: ${error.message}`);
+        }
+        return data;
+    }
+    static async isUsernameAvailable(username) {
+        const user = await this.findByUsername(username);
+        return user === null;
+    }
+    static async updateUserProfile(id, updates) {
+        const updateData = {
+            updated_at: new Date().toISOString()
+        };
+        if (updates.username !== undefined) {
+            updateData.username = updates.username.toLowerCase();
+            updateData.username_set_at = new Date().toISOString();
+        }
+        if (updates.onboardingCompleted !== undefined) {
+            updateData.onboarding_completed = updates.onboardingCompleted;
+        }
+        const { data, error } = await supabase_1.supabase
+            .from(supabase_1.TABLES.USERS)
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) {
+            throw new Error(`Failed to update user profile: ${error.message}`);
         }
         return data;
     }

@@ -8,7 +8,9 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const UserSupabase_1 = require("../models/UserSupabase");
 const WalletSupabase_1 = require("../models/WalletSupabase");
 const ApiKeySupabase_1 = require("../models/ApiKeySupabase");
+const UserSessionSupabase_1 = require("../models/UserSessionSupabase");
 const WalletService_1 = require("./WalletService");
+const PrivyAuthService_1 = require("./PrivyAuthService");
 class AuthService {
     static async register(data) {
         try {
@@ -36,6 +38,21 @@ class AuthService {
             });
             // Generate JWT token
             const token = this.generateToken(user);
+            // Create user session for tracking
+            try {
+                await UserSessionSupabase_1.UserSessionModel.createSession({
+                    userId: user.id,
+                    authType: 'jwt',
+                    internalToken: token,
+                    deviceInfo: 'web-browser', // Could be enhanced with actual device info
+                    ipAddress: 'unknown', // Could be enhanced with actual IP
+                    userAgent: 'unknown' // Could be enhanced with actual user agent
+                });
+            }
+            catch (error) {
+                console.error('Failed to create JWT session during registration:', error);
+                // Don't fail authentication if session creation fails
+            }
             return {
                 success: true,
                 user,
@@ -67,6 +84,21 @@ class AuthService {
                 };
             }
             const token = this.generateToken(user);
+            // Create user session for tracking
+            try {
+                await UserSessionSupabase_1.UserSessionModel.createSession({
+                    userId: user.id,
+                    authType: 'jwt',
+                    internalToken: token,
+                    deviceInfo: 'web-browser', // Could be enhanced with actual device info
+                    ipAddress: 'unknown', // Could be enhanced with actual IP
+                    userAgent: 'unknown' // Could be enhanced with actual user agent
+                });
+            }
+            catch (error) {
+                console.error('Failed to create JWT session:', error);
+                // Don't fail authentication if session creation fails
+            }
             return {
                 success: true,
                 user,
@@ -105,6 +137,19 @@ class AuthService {
     static async getUserApiKeys(userId) {
         return await ApiKeySupabase_1.ApiKeyModel.findByUserId(userId);
     }
+    static async authenticateWithPrivy(privyToken) {
+        try {
+            const result = await PrivyAuthService_1.PrivyAuthService.verifyPrivyToken(privyToken);
+            return result;
+        }
+        catch (error) {
+            console.error('Privy authentication error:', error);
+            return {
+                success: false,
+                error: 'Privy authentication failed'
+            };
+        }
+    }
     static verifyToken(token) {
         try {
             return jsonwebtoken_1.default.verify(token, this.JWT_SECRET);
@@ -116,7 +161,8 @@ class AuthService {
     static generateToken(user) {
         return jsonwebtoken_1.default.sign({
             userId: user.id,
-            email: user.email
+            email: user.email,
+            authType: 'jwt'
         }, this.JWT_SECRET, { expiresIn: this.JWT_EXPIRES_IN });
     }
     static async generatePumpApiKey() {
