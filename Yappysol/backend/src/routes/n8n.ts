@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { authMiddleware } from '../middlewares/authMiddleware';
 
@@ -55,7 +55,7 @@ router.post('/n8n-webhook', asyncHandler(async (req, res) => {
 
 // Server-to-server authentication middleware for n8n
 const serverAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization as string;
   const serverKey = process.env.BACKEND_SERVER_KEY;
   
   if (!serverKey) {
