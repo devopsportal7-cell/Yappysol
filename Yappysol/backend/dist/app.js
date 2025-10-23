@@ -10,6 +10,7 @@ const token_1 = __importDefault(require("./routes/token"));
 const auth_1 = __importDefault(require("./routes/auth"));
 const user_1 = __importDefault(require("./routes/user"));
 const n8n_1 = __importDefault(require("./routes/n8n"));
+const n8n_s2s_1 = __importDefault(require("./routes/n8n.s2s"));
 const cors_1 = __importDefault(require("cors"));
 const trendingTokens_1 = __importDefault(require("./routes/trendingTokens"));
 const moralis_1 = require("./lib/moralis");
@@ -33,6 +34,7 @@ app.use((0, cors_1.default)({
 app.use('/api/auth', auth_1.default);
 app.use('/api/user', user_1.default);
 app.use('/api/n8n', n8n_1.default);
+app.use('/api/n8n', n8n_s2s_1.default);
 app.use('/api/chat', chat_1.default);
 app.use('/api/token', token_1.default);
 app.use('/api/trending-tokens', trendingTokens_1.default);
