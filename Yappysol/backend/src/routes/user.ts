@@ -39,6 +39,31 @@ router.get('/username/check', optionalAuthMiddleware, usernameCheckLimiter, asyn
     });
   }
 
+  // If user is authenticated and already has a username, check if they're trying to change it
+  if (req.user?.id) {
+    const currentUser = await UserModel.findById(req.user.id);
+    if (currentUser?.username) {
+      // User already has a username
+      if (currentUser.username.toLowerCase() === username.toLowerCase()) {
+        // They're checking their own username - it's "available" for them
+        return res.status(200).json({
+          available: true,
+          username: username,
+          message: 'This is your current username',
+          isCurrentUser: true
+        });
+      } else {
+        // They're trying to change their username - not allowed
+        return res.status(200).json({
+          available: false,
+          username: username,
+          message: 'Username cannot be changed once set',
+          isCurrentUser: false
+        });
+      }
+    }
+  }
+
   const validation = validateUsername(username);
   if (!validation.valid) {
     return res.status(200).json({
@@ -48,7 +73,7 @@ router.get('/username/check', optionalAuthMiddleware, usernameCheckLimiter, asyn
     });
   }
 
-  const isAvailable = await UserModel.isUsernameAvailable(validation.username!);
+  const isAvailable = await UserModel.isUsernameAvailable(validation.username!, req.user?.id);
   
   res.status(200).json({
     available: isAvailable,
@@ -76,35 +101,33 @@ router.patch('/profile', authMiddleware, profileUpdateLimiter, asyncHandler(asyn
 
   // Handle username update
   if (username !== undefined) {
-    // Check if user already has a username
-    if (currentUser.username) {
-      return res.status(400).json({
-        success: false,
-        error: 'USERNAME_ALREADY_SET',
-        message: 'Username cannot be changed once set'
-      });
-    }
+    // Allow username changes - check if it's different from current
+    if (currentUser.username && currentUser.username.toLowerCase() === username.toLowerCase()) {
+      // Same username, no change needed
+      updates.username = currentUser.username;
+    } else {
+      // Different username - validate and check availability
+      const validation = validateUsername(username);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: 'INVALID_USERNAME',
+          message: validation.message
+        });
+      }
 
-    const validation = validateUsername(username);
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: 'INVALID_USERNAME',
-        message: validation.message
-      });
-    }
+      // Check availability (excluding current user's username)
+      const isAvailable = await UserModel.isUsernameAvailable(validation.username!, userId);
+      if (!isAvailable) {
+        return res.status(409).json({
+          success: false,
+          error: 'USERNAME_TAKEN',
+          message: 'This username is already taken'
+        });
+      }
 
-    // Check availability
-    const isAvailable = await UserModel.isUsernameAvailable(validation.username!);
-    if (!isAvailable) {
-      return res.status(409).json({
-        success: false,
-        error: 'USERNAME_TAKEN',
-        message: 'This username is already taken'
-      });
+      updates.username = validation.username;
     }
-
-    updates.username = validation.username;
   }
 
   // Handle onboarding completion
@@ -133,6 +156,47 @@ router.patch('/profile', authMiddleware, profileUpdateLimiter, asyncHandler(asyn
       createdAt: updatedUser!.created_at,
       solBalance: 0 // You'll need to calculate this
     }
+  });
+}));
+
+// Get onboarding status
+router.get('/onboarding/status', authMiddleware, asyncHandler(async (req, res) => {
+  const userId = (req as any).user!.id;
+  
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    return res.status(404).json({ 
+      success: false,
+      error: 'USER_NOT_FOUND',
+      message: 'User not found' 
+    });
+  }
+
+  // Determine onboarding progress
+  const progress = {
+    step: 1,
+    completed: user.onboarding_completed,
+    username: user.username,
+    hasPassword: !!user.app_password_hash,
+    hasWallet: false, // TODO: Check wallet status
+    canProceed: true
+  };
+
+  // Determine current step
+  if (!user.username) {
+    progress.step = 2; // Username step
+    progress.canProceed = false;
+  } else if (!user.app_password_hash) {
+    progress.step = 3; // Password step
+  } else if (!progress.hasWallet) {
+    progress.step = 4; // Wallet step
+  } else {
+    progress.step = 5; // Complete
+  }
+
+  res.json({
+    success: true,
+    progress
   });
 }));
 

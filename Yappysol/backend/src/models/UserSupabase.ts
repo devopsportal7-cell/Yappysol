@@ -135,9 +135,16 @@ export class UserModel {
     return data;
   }
 
-  static async isUsernameAvailable(username: string): Promise<boolean> {
+  static async isUsernameAvailable(username: string, excludeUserId?: string): Promise<boolean> {
     const user = await this.findByUsername(username);
-    return user === null;
+    if (!user) return true; // Username is available
+    
+    // If excludeUserId is provided, check if the found user is the same as excluded user
+    if (excludeUserId && user.id === excludeUserId) {
+      return true; // Username is available for this user (they can keep their current username)
+    }
+    
+    return false; // Username is taken by someone else
   }
 
   static async updateUserProfile(id: string, updates: UpdateUserProfileData): Promise<User | null> {
