@@ -151,10 +151,10 @@ async function getMintAddressFromTransaction(signature: string): Promise<string 
 }
 
 const TOKEN_CREATION_STEPS = [
-  'image',
   'name',
   'symbol',
   'description',
+  'image',
   'twitter',
   'telegram',
   'website',
@@ -614,15 +614,15 @@ export class TokenCreationService {
         // Repeat the current step prompt
         let prompt = '';
         switch (session.step) {
-          case 'image': prompt = 'Please upload an image for your token.'; break;
           case 'name': prompt = 'What is the name of your token?'; break;
           case 'symbol': prompt = 'What is the ticker? (2-10 uppercase letters or numbers)'; break;
-          case 'amount': prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)'; break;
           case 'description': prompt = 'Please provide a description.'; break;
+          case 'image': prompt = 'Please upload an image for your token.'; break;
           case 'twitter': prompt = 'Twitter link? (must be a valid URL, or type "skip" to leave blank)'; break;
           case 'telegram': prompt = 'Telegram link? (must be a valid URL, or type "skip" to leave blank)'; break;
           case 'website': prompt = 'Website? (must be a valid URL, or type "skip" to leave blank)'; break;
           case 'pool': prompt = 'Which pool would you like to use? (pump)'; break;
+          case 'amount': prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)'; break;
           case 'confirmation': prompt = 'Type "proceed" to create your token or "cancel" to abort.'; break;
           default: prompt = 'Please continue the token creation process.'; break;
         }
@@ -632,14 +632,14 @@ export class TokenCreationService {
       }
     }
 
-    // If no step, this is the first call after reset: prompt for image and do NOT advance
+    // If no step, this is the first call after reset: prompt for name and do NOT advance
     if (!step) {
-      step = 'image';
+      step = 'name';
       session.step = step;
       // Set default pool to 'pump' for new sessions
       session.pool = 'pump';
       tokenCreationSessions[userId] = session;
-      const prompt = 'Please upload an image for your token.';
+      const prompt = 'What is the name of your token?';
       console.log('[DEBUG] Returning step:', step, 'prompt:', prompt);
       return { prompt, step };
     }
@@ -654,7 +654,7 @@ export class TokenCreationService {
     }
 
     // Start or continue session
-    if (!step) step = 'image';
+    if (!step) step = 'name';
 
     // Save input for current step
     if (step) {
@@ -713,15 +713,15 @@ export class TokenCreationService {
     if (nextStep) {
       let prompt = '';
       switch (nextStep) {
-        case 'image': prompt = 'Please upload an image for your token.'; break;
         case 'name': prompt = 'What is the name of your token?'; break;
         case 'symbol': prompt = 'What is the ticker? (2-10 uppercase letters or numbers)'; break;
-                  case 'amount': prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)'; break;
         case 'description': prompt = 'Please provide a description.'; break;
+        case 'image': prompt = 'Please upload an image for your token.'; break;
         case 'twitter': prompt = 'Twitter link? (must be a valid URL, or type "skip" to leave blank)'; break;
         case 'telegram': prompt = 'Telegram link? (must be a valid URL, or type "skip" to leave blank)'; break;
         case 'website': prompt = 'Website? (must be a valid URL, or type "skip" to leave blank)'; break;
         case 'pool': prompt = 'Which pool would you like to use? (pump)'; break;
+        case 'amount': prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)'; break;
         case 'confirmation': {
           // Get wallet and fee information based on pool type
           let walletInfo = null;
@@ -980,12 +980,12 @@ export class TokenCreationService {
     
     // Store the file buffer for later use
     session.imageFile = file;
-    session.step = 'name';
+    session.step = 'twitter';
     tokenCreationSessions[userId] = session;
     
     return {
-      prompt: "Great! I've saved your token image. Now, please provide a name for your token.",
-      step: 'name'
+      prompt: "Great! I've saved your token image. Now, please provide your Twitter link (or type 'skip' to leave blank).",
+      step: 'twitter'
     };
   }
 } 

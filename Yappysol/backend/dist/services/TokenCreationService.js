@@ -141,10 +141,10 @@ async function getMintAddressFromTransaction(signature) {
     }
 }
 const TOKEN_CREATION_STEPS = [
-    'image',
     'name',
     'symbol',
     'description',
+    'image',
     'twitter',
     'telegram',
     'website',
@@ -555,20 +555,17 @@ class TokenCreationService {
                 // Repeat the current step prompt
                 let prompt = '';
                 switch (session.step) {
-                    case 'image':
-                        prompt = 'Please upload an image for your token.';
-                        break;
                     case 'name':
                         prompt = 'What is the name of your token?';
                         break;
                     case 'symbol':
                         prompt = 'What is the ticker? (2-10 uppercase letters or numbers)';
                         break;
-                    case 'amount':
-                        prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)';
-                        break;
                     case 'description':
                         prompt = 'Please provide a description.';
+                        break;
+                    case 'image':
+                        prompt = 'Please upload an image for your token.';
                         break;
                     case 'twitter':
                         prompt = 'Twitter link? (must be a valid URL, or type "skip" to leave blank)';
@@ -581,6 +578,9 @@ class TokenCreationService {
                         break;
                     case 'pool':
                         prompt = 'Which pool would you like to use? (pump)';
+                        break;
+                    case 'amount':
+                        prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)';
                         break;
                     case 'confirmation':
                         prompt = 'Type "proceed" to create your token or "cancel" to abort.';
@@ -595,14 +595,14 @@ class TokenCreationService {
                 return { prompt: 'Reply "yes" to confirm interruption and reset, or "no" to continue the token creation process.', step: session.step };
             }
         }
-        // If no step, this is the first call after reset: prompt for image and do NOT advance
+        // If no step, this is the first call after reset: prompt for name and do NOT advance
         if (!step) {
-            step = 'image';
+            step = 'name';
             session.step = step;
             // Set default pool to 'pump' for new sessions
             session.pool = 'pump';
             exports.tokenCreationSessions[userId] = session;
-            const prompt = 'Please upload an image for your token.';
+            const prompt = 'What is the name of your token?';
             console.log('[DEBUG] Returning step:', step, 'prompt:', prompt);
             return { prompt, step };
         }
@@ -617,7 +617,7 @@ class TokenCreationService {
         }
         // Start or continue session
         if (!step)
-            step = 'image';
+            step = 'name';
         // Save input for current step
         if (step) {
             if (["twitter", "telegram", "website"].includes(step) && userInput.trim().toLowerCase() === "skip") {
@@ -678,20 +678,17 @@ class TokenCreationService {
         if (nextStep) {
             let prompt = '';
             switch (nextStep) {
-                case 'image':
-                    prompt = 'Please upload an image for your token.';
-                    break;
                 case 'name':
                     prompt = 'What is the name of your token?';
                     break;
                 case 'symbol':
                     prompt = 'What is the ticker? (2-10 uppercase letters or numbers)';
                     break;
-                case 'amount':
-                    prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)';
-                    break;
                 case 'description':
                     prompt = 'Please provide a description.';
+                    break;
+                case 'image':
+                    prompt = 'Please upload an image for your token.';
                     break;
                 case 'twitter':
                     prompt = 'Twitter link? (must be a valid URL, or type "skip" to leave blank)';
@@ -704,6 +701,9 @@ class TokenCreationService {
                     break;
                 case 'pool':
                     prompt = 'Which pool would you like to use? (pump)';
+                    break;
+                case 'amount':
+                    prompt = 'How much SOL do you want to launch with? (Minimum 0.01 SOL recommended for Pump pool)';
                     break;
                 case 'confirmation': {
                     // Get wallet and fee information based on pool type
@@ -931,11 +931,11 @@ class TokenCreationService {
         let session = exports.tokenCreationSessions[userId] || { step: 'image' };
         // Store the file buffer for later use
         session.imageFile = file;
-        session.step = 'name';
+        session.step = 'twitter';
         exports.tokenCreationSessions[userId] = session;
         return {
-            prompt: "Great! I've saved your token image. Now, please provide a name for your token.",
-            step: 'name'
+            prompt: "Great! I've saved your token image. Now, please provide your Twitter link (or type 'skip' to leave blank).",
+            step: 'twitter'
         };
     }
 }
