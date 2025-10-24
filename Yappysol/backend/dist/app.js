@@ -26,10 +26,27 @@ moralis_1.moralisService.initialize().catch(error => {
     // The service will handle uninitialized state
 });
 app.use(express_1.default.json());
-const corsOrigin = process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
+// CORS configuration to support multiple origins
+const corsOrigins = process.env.FRONTEND_BASE_URL?.split(',') || ['http://localhost:3000'];
+console.log('CORS Origins configured:', corsOrigins);
 app.use((0, cors_1.default)({
-    origin: corsOrigin,
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin)
+            return callback(null, true);
+        if (corsOrigins.includes(origin)) {
+            console.log('CORS: Allowing origin:', origin);
+            return callback(null, true);
+        }
+        else {
+            console.log('CORS: Blocking origin:', origin);
+            console.log('CORS: Allowed origins:', corsOrigins);
+            return callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use('/api/auth', auth_1.default);
 app.use('/api/user', user_1.default);

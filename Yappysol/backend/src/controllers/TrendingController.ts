@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { TrendingService } from '../services/TrendingService';
 
 export class TrendingController {
   static async list(req: Request, res: Response) {
@@ -7,45 +8,36 @@ export class TrendingController {
     console.log('[TRENDING] List request:', { limit, timeframe });
     
     try {
-      // TODO: Implement actual trending tokens from Dexscreener/CoinGecko
-      // For now, return mock data
-      const mockTrending = [
-        {
-          token: 'SOL',
-          symbol: 'SOL',
-          price_usd: '100.50',
-          change_24h: '+5.2%',
-          volume_24h: '1000000',
-          market_cap: '50000000'
-        },
-        {
-          token: 'USDC',
-          symbol: 'USDC',
-          price_usd: '1.00',
-          change_24h: '0.0%',
-          volume_24h: '500000',
-          market_cap: '30000000'
-        },
-        {
-          token: 'BONK',
-          symbol: 'BONK',
-          price_usd: '0.000012',
-          change_24h: '+15.3%',
-          volume_24h: '2000000',
-          market_cap: '10000000'
-        }
-      ];
+      const trendingService = new TrendingService();
+      
+      // Use the same trending logic as the original system
+      const trendingTokens = await trendingService.getTrending(limit);
+      
+      // Format for n8n response
+      const formattedTokens = trendingTokens.map((token: any) => ({
+        token: token.baseToken?.symbol || 'Unknown',
+        symbol: token.baseToken?.symbol || 'Unknown',
+        price_usd: token.priceUsd || '0',
+        change_24h: token.priceChange?.h24 ? `${token.priceChange.h24 > 0 ? '+' : ''}${token.priceChange.h24.toFixed(2)}%` : 'N/A',
+        volume_24h: token.volume?.h24 || '0',
+        market_cap: token.marketCap || '0',
+        address: token.baseToken?.address || token.pairAddress,
+        dex: token.dexId || 'Unknown',
+        pair_address: token.pairAddress,
+        url: token.url
+      }));
 
       res.json({
         status: 'success',
-        items: mockTrending.slice(0, limit),
+        items: formattedTokens,
         timeframe: timeframe,
-        message: `Top ${limit} trending tokens`
+        message: `Top ${formattedTokens.length} trending tokens`
       });
     } catch (error) {
       console.error('[TRENDING] List error:', error);
       res.status(500).json({
-        error: 'Failed to fetch trending tokens'
+        error: 'Failed to fetch trending tokens',
+        details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PumpUploader } from '../services/PumpUploader';
+import { TokenCreationService } from '../services/TokenCreationService';
 
 export class LaunchController {
   static async init(req: Request, res: Response) {
@@ -8,6 +8,8 @@ export class LaunchController {
     console.log('[LAUNCH] Init request:', { session_id, user_id, draft });
     
     try {
+      const creationService = new TokenCreationService();
+      
       // Validate required fields
       if (!draft?.token_name || !draft?.token_symbol) {
         return res.status(400).json({
@@ -15,77 +17,45 @@ export class LaunchController {
         });
       }
 
-      // Upload image to IPFS if provided
-      let imageUrl = draft.image_url;
-      if (draft.image_url && !draft.image_url.startsWith('ipfs://')) {
-        try {
-          const pumpUploader = new PumpUploader();
-          const ipfsResult = await pumpUploader.uploadImage(draft.image_url);
-          imageUrl = `ipfs://${ipfsResult.hash}`;
-        } catch (error) {
-          console.error('[LAUNCH] Image upload failed:', error);
-          // Continue without image upload
-        }
-      }
-
-      // Create metadata
-      const metadata = {
+      // Use the same token creation logic as the original system
+      const result = await creationService.createToken({
         name: draft.token_name,
         symbol: draft.token_symbol,
         description: draft.description || '',
-        image: imageUrl,
-        external_url: draft.website || '',
-        attributes: [
-          {
-            trait_type: 'Website',
-            value: draft.website || ''
-          },
-          {
-            trait_type: 'Twitter',
-            value: draft.twitter || ''
-          },
-          {
-            trait_type: 'Telegram',
-            value: draft.telegram || ''
-          }
-        ]
-      };
+        image: draft.image_url || '',
+        website: draft.website || '',
+        twitter: draft.twitter || '',
+        telegram: draft.telegram || '',
+        supply: draft.supply || '1000000',
+        decimals: draft.decimals || 9,
+        walletAddress: draft.wallet_address || 'default-wallet'
+      });
 
-      // Upload metadata to IPFS
-      let metadataUri = '';
-      try {
-        const pumpUploader = new PumpUploader();
-        const metadataResult = await pumpUploader.uploadMetadata(metadata);
-        metadataUri = `ipfs://${metadataResult.hash}`;
-      } catch (error) {
-        console.error('[LAUNCH] Metadata upload failed:', error);
-        return res.status(500).json({
-          error: 'Failed to upload metadata to IPFS'
-        });
-      }
-
-      // TODO: Replace with actual transaction builder
-      // For now, return ready for signature
       res.json({
         status: 'READY_FOR_SIGNATURE',
         confirm_text: `Launching ${draft.token_name} (${draft.token_symbol})`,
         sign: {
           provider: 'pump',
-          metadataUri: metadataUri,
+          transaction: result.unsignedTransaction,
+          mintAddress: result.mint,
           token_name: draft.token_name,
           token_symbol: draft.token_symbol,
           description: draft.description,
-          image_url: imageUrl,
+          image_url: draft.image_url,
           website: draft.website,
           twitter: draft.twitter,
-          telegram: draft.telegram
-        }
+          telegram: draft.telegram,
+          supply: draft.supply,
+          decimals: draft.decimals
+        },
+        message: `Token creation ready for signature: ${draft.token_name}`
       });
 
     } catch (error) {
       console.error('[LAUNCH] Init error:', error);
       res.status(500).json({
-        error: 'Failed to initialize token launch'
+        error: 'Failed to initialize token launch',
+        details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
