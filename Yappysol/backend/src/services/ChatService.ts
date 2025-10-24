@@ -357,6 +357,7 @@ export class ChatService {
       // Check if we're in a step flow - this takes priority over intent detection
       if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
         console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
+        console.log('[chatWithOpenAI] Step flow context:', JSON.stringify(context, null, 2));
         
         // Determine which service to route to based on the step
         // Token creation steps (more specific, check first)
@@ -437,8 +438,10 @@ export class ChatService {
     console.log('[chatWithOpenAI] Is swap intent:', isSwap);
     if (isSwap) {
       console.log('[chatWithOpenAI] Routing to: swap service');
+      console.log('[chatWithOpenAI] Swap context:', JSON.stringify(context, null, 2));
       try {
         const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
+        console.log('[chatWithOpenAI] Swap result:', JSON.stringify(swapResult, null, 2));
         return {
           prompt: swapResult.prompt,
           step: swapResult.step,
@@ -454,10 +457,15 @@ export class ChatService {
     }
     
     // Create token intent detection
-    if (this.isCreateTokenIntent(message)) {
+    console.log('[chatWithOpenAI] Checking create token intent for message:', message);
+    const isCreateToken = this.isCreateTokenIntent(message);
+    console.log('[chatWithOpenAI] Is create token intent:', isCreateToken);
+    if (isCreateToken) {
       console.log('[chatWithOpenAI] Routing to: token creation service');
+      console.log('[chatWithOpenAI] Create token context:', JSON.stringify(context, null, 2));
       try {
         const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
+        console.log('[chatWithOpenAI] Creation result:', JSON.stringify(creationResult, null, 2));
         if (!creationResult) {
           return { prompt: "Sorry, I couldn't process your token creation request. Please try again." };
         }
