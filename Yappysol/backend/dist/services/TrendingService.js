@@ -8,7 +8,7 @@ class TrendingService {
             console.log('[TrendingService] Fetching trending tokens from Supabase...');
             const { data: trendingTokens, error } = await supabase_1.supabase
                 .from('trending_tokens_current')
-                .select('rank, mint, name, symbol, price_str, pct_change')
+                .select('rank, mint, name, symbol, price_str, pct_change, image_url, solscan_url, updated_at')
                 .order('rank', { ascending: true })
                 .limit(limit);
             if (error) {
@@ -32,7 +32,10 @@ class TrendingService {
                     h24: 'N/A' // Not available in your table
                 },
                 address: token.mint,
-                rank: token.rank
+                rank: token.rank,
+                imageUrl: token.image_url,
+                solscanUrl: token.solscan_url,
+                updatedAt: token.updated_at
             }));
         }
         catch (error) {

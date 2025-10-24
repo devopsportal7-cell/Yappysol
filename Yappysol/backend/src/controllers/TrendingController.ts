@@ -11,7 +11,7 @@ export class TrendingController {
       // Query your existing trending_tokens_current table
       const { data: trendingTokens, error } = await supabase
         .from('trending_tokens_current')
-        .select('rank, mint, name, symbol, price_str, pct_change')
+        .select('rank, mint, name, symbol, price_str, pct_change, image_url, solscan_url, updated_at')
         .order('rank', { ascending: true })
         .limit(limit);
 
@@ -39,7 +39,10 @@ export class TrendingController {
         market_cap: 'N/A', // Not available in your table
         address: token.mint,
         rank: token.rank,
-        name: token.name
+        name: token.name,
+        image_url: token.image_url,
+        solscan_url: token.solscan_url,
+        updated_at: token.updated_at
       }));
 
       res.json({

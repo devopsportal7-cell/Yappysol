@@ -11,6 +11,9 @@ const UserPortfolioService_1 = require("./UserPortfolioService");
 const TokenSwapService_1 = require("./TokenSwapService");
 const TokenCreationService_1 = require("./TokenCreationService");
 const TrendingService_1 = require("./TrendingService");
+const IntentClassifier_1 = require("./IntentClassifier");
+const EntityExtractor_1 = require("./EntityExtractor");
+const RAGService_1 = require("./RAGService");
 const openai = process.env.OPENAI_API_KEY ? new openai_1.default({ apiKey: process.env.OPENAI_API_KEY }) : null;
 class ChatService {
     constructor() {
@@ -19,6 +22,9 @@ class ChatService {
         this.tokenSwapService = new TokenSwapService_1.TokenSwapService();
         this.tokenCreationService = new TokenCreationService_1.TokenCreationService();
         this.trendingService = new TrendingService_1.TrendingService();
+        this.intentClassifier = new IntentClassifier_1.IntentClassifier();
+        this.entityExtractor = new EntityExtractor_1.EntityExtractor();
+        this.ragService = new RAGService_1.RAGService();
     }
     isPriceQuery(message) {
         const priceKeywords = [
@@ -288,6 +294,54 @@ class ChatService {
         const lowerMessage = message.toLowerCase();
         return generalKeywords.some(keyword => lowerMessage.includes(keyword));
     }
+    isGeneralQuestion(message) {
+        const questionKeywords = [
+            'what is',
+            'how does',
+            'why',
+            'when',
+            'where',
+            'tell me about',
+            'explain',
+            'can you explain',
+            'i want to know',
+            'i don\'t understand',
+            'what does',
+            'how do i',
+            'how can i',
+            'what are',
+            'how are',
+            'what should',
+            'how should',
+            'what would',
+            'how would',
+            'difference between',
+            'compare',
+            'vs',
+            'versus',
+            'better than',
+            'best',
+            'worst',
+            'pros and cons',
+            'advantages',
+            'disadvantages',
+            'benefits',
+            'risks',
+            'safe',
+            'secure',
+            'reliable',
+            'trustworthy',
+            'legitimate',
+            'scam',
+            'fraud',
+            'fake',
+            'real',
+            'official',
+            'unofficial'
+        ];
+        const lowerMessage = message.toLowerCase();
+        return questionKeywords.some(keyword => lowerMessage.includes(keyword));
+    }
     async getMarketContext() {
         try {
             // Get trending tokens for market context
@@ -321,6 +375,61 @@ class ChatService {
             prompt += `   Address: \`${token.baseToken?.address || 'N/A'}\`\n\n`;
         });
         return prompt;
+    }
+    async generateConversationalTrendingResponse(tokens, message) {
+        if (!openai) {
+            return this.formatTrendingTokens(tokens);
+        }
+        try {
+            // Prepare structured data for OpenAI
+            const tokenData = tokens.map((token, index) => ({
+                rank: index + 1,
+                symbol: token.symbol || 'Unknown',
+                name: token.name || 'Unknown',
+                price: token.priceUsd || 'N/A',
+                change24h: token.priceChange?.h24 || 'N/A',
+                volume24h: token.volume?.h24 || 'N/A',
+                address: token.address || 'N/A',
+                imageUrl: token.imageUrl || null,
+                solscanUrl: token.solscanUrl || null
+            }));
+            const systemPrompt = `You are Yappysol, a helpful and enthusiastic Solana DeFi assistant. The user asked about trending tokens.
+
+IMPORTANT RULES:
+1. Be conversational and engaging with Yappysol's personality
+2. Use emojis appropriately but not excessively
+3. Highlight interesting trends and movements
+4. Keep it concise but informative
+5. Always include the structured data at the end for the frontend
+
+Here's the trending token data:
+${JSON.stringify(tokenData, null, 2)}
+
+Format your response as:
+1. Engaging conversational intro
+2. Brief analysis of trends
+3. Key highlights
+4. Then include: "📊 **Detailed Data:**" followed by the structured format
+
+Be enthusiastic about the Solana ecosystem!`;
+            const completion = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: message }
+                ],
+                temperature: 0.7,
+                max_tokens: 800,
+            });
+            const conversationalResponse = completion.choices[0].message.content || this.formatTrendingTokens(tokens);
+            // Append structured data for frontend
+            const structuredData = '\n\n📊 **Detailed Data:**\n' + this.formatTrendingTokens(tokens);
+            return conversationalResponse + structuredData;
+        }
+        catch (error) {
+            console.error('[ChatService] Error generating conversational trending response:', error);
+            return this.formatTrendingTokens(tokens);
+        }
     }
     async chatWithOpenAI(message, context = {}) {
         try {
@@ -379,10 +488,152 @@ class ChatService {
                     }
                 }
             }
+            // === INTELLIGENT INTENT CLASSIFICATION ===
+            // Use AI-powered classification to understand natural language
+            console.log('[chatWithOpenAI] Starting intelligent intent classification...');
+            try {
+                const intentResult = await this.intentClassifier.classifyIntent(message);
+                console.log('[chatWithOpenAI] Intent classification result:', intentResult);
+                // If AI classification is confident, use it to route intelligently
+                if (intentResult.confidence >= 0.7) {
+                    console.log('[chatWithOpenAI] Using AI-classified intent:', intentResult.intent);
+                    console.log('[chatWithOpenAI] Is actionable:', intentResult.isActionable);
+                    // If it's not actionable (question), route to RAG instead
+                    if (!intentResult.isActionable) {
+                        console.log('[chatWithOpenAI] Non-actionable intent, routing to RAG');
+                        try {
+                            const entities = intentResult.entities && Object.keys(intentResult.entities).length > 0
+                                ? intentResult.entities
+                                : await this.entityExtractor.extractEntities(message, intentResult.intent);
+                            const ragResult = await this.ragService.answerQuestion(message, entities, context);
+                            if (ragResult.source === 'knowledge_base' && ragResult.confidence > 0.6) {
+                                return {
+                                    prompt: ragResult.answer,
+                                    action: 'rag_answer',
+                                    sources: ragResult.sources,
+                                    metadata: ragResult.metadata
+                                };
+                            }
+                            else {
+                                return {
+                                    prompt: ragResult.answer,
+                                    action: 'general_answer',
+                                    metadata: ragResult.metadata
+                                };
+                            }
+                        }
+                        catch (error) {
+                            console.error('[chatWithOpenAI] RAG failed for non-actionable intent:', error);
+                            // Fall through to regular processing
+                        }
+                    }
+                    // Extract additional entities if needed
+                    const entities = intentResult.entities && Object.keys(intentResult.entities).length > 0
+                        ? intentResult.entities
+                        : await this.entityExtractor.extractEntities(message, intentResult.intent);
+                    console.log('[chatWithOpenAI] Extracted entities:', entities);
+                    // Route based on AI-classified intent (only for actionable intents)
+                    switch (intentResult.intent) {
+                        case 'swap': {
+                            console.log('[chatWithOpenAI] AI-routed to: swap service');
+                            // Enhance context with extracted entities
+                            const enhancedContext = { ...context, ...entities };
+                            try {
+                                const swapResult = await this.tokenSwapService.handleSwapIntent(message, enhancedContext);
+                                return {
+                                    prompt: swapResult.prompt,
+                                    step: swapResult.step,
+                                    action: 'swap',
+                                    unsignedTransaction: swapResult.unsignedTransaction,
+                                    requireSignature: swapResult.requireSignature,
+                                    swapDetails: swapResult.swapDetails
+                                };
+                            }
+                            catch (error) {
+                                console.error('[chatWithOpenAI] Error in AI-routed swap:', error);
+                                // Fall through to keyword matching
+                            }
+                            break;
+                        }
+                        case 'launch': {
+                            console.log('[chatWithOpenAI] AI-routed to: token creation service');
+                            const enhancedContext = { ...context, ...entities };
+                            try {
+                                const creationResult = await this.tokenCreationService.handleCreationIntent(message, enhancedContext);
+                                if (creationResult) {
+                                    return {
+                                        prompt: creationResult.prompt,
+                                        step: creationResult.step,
+                                        action: 'create-token',
+                                        unsignedTransaction: creationResult.unsignedTransaction,
+                                        requireSignature: creationResult.requireSignature,
+                                        tokenDetails: creationResult.tokenDetails
+                                    };
+                                }
+                            }
+                            catch (error) {
+                                console.error('[chatWithOpenAI] Error in AI-routed launch:', error);
+                                // Fall through to keyword matching
+                            }
+                            break;
+                        }
+                        case 'price': {
+                            console.log('[chatWithOpenAI] AI-routed to: price service');
+                            try {
+                                const priceResponse = await this.tokenPriceService.handlePriceQuery(message);
+                                return { prompt: priceResponse.prompt };
+                            }
+                            catch (error) {
+                                console.error('[chatWithOpenAI] Error in AI-routed price:', error);
+                                // Fall through to keyword matching
+                            }
+                            break;
+                        }
+                        case 'portfolio': {
+                            console.log('[chatWithOpenAI] AI-routed to: portfolio service');
+                            const walletAddress = context.walletAddress || (context.user && context.user.walletAddress);
+                            if (!walletAddress) {
+                                return { prompt: 'Please connect your wallet to view your portfolio.' };
+                            }
+                            try {
+                                const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
+                                return { prompt: portfolioMsg };
+                            }
+                            catch (error) {
+                                console.error('[chatWithOpenAI] Error in AI-routed portfolio:', error);
+                                // Fall through to keyword matching
+                            }
+                            break;
+                        }
+                        case 'trending': {
+                            console.log('[chatWithOpenAI] AI-routed to: trending service');
+                            try {
+                                const trendingTokens = await this.trendingService.getTrending(entities.limit || 10);
+                                const trendingPrompt = this.formatTrendingTokens(trendingTokens);
+                                return {
+                                    prompt: trendingPrompt,
+                                    action: 'trending'
+                                };
+                            }
+                            catch (error) {
+                                console.error('[chatWithOpenAI] Error in AI-routed trending:', error);
+                                // Fall through to keyword matching
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (error) {
+                console.error('[chatWithOpenAI] Error in intent classification:', error);
+                // Fall through to keyword matching
+            }
+            // === FALLBACK TO KEYWORD MATCHING ===
+            console.log('[chatWithOpenAI] Falling back to keyword-based intent detection...');
             // Special: Bot capability intent
             if (this.isBotCapabilityQuery(message)) {
                 return {
-                    prompt: `🚀 **Welcome to Soltikka**\n\nYour AI-Powered Solana Assistant\n\nSoltikka empowers your crypto journey with powerful chat commands:\n\n🔄 **Token Swaps & Liquidity**\nEasily swap tokens and manage liquidity positions\n\n🎨 **Token Creation & Tracking**\nLaunch your own token or track existing collections\n\n📈 **Portfolio Monitoring**\nTrack your assets and get real-time price updates\n\n💬 **Natural Language DeFi**\nInteract with DeFi protocols using plain English\n\n**Quick Start Commands:**\n- "Create a token"\n- "Swap token"\n- "What is the price of BONK?"\n\n🔒 **Security First:** All actions require wallet confirmation. Soltikka never holds your funds.`
+                    prompt: `🚀 **Welcome to Yappysol**\n\nYour AI-Powered Solana Assistant\n\nYappysol empowers your crypto journey with powerful chat commands:\n\n🔄 **Token Swaps & Liquidity**\nEasily swap tokens and manage liquidity positions\n\n🎨 **Token Creation & Tracking**\nLaunch your own token or track existing collections\n\n📈 **Portfolio Monitoring**\nTrack your assets and get real-time price updates\n\n💬 **Natural Language DeFi**\nInteract with DeFi protocols using plain English\n\n**Quick Start Commands:**\n- "Create a token"\n- "Swap token"\n- "What is the price of BONK?"\n\n🔒 **Security First:** All actions require wallet confirmation. Yappysol never holds your funds.`
                 };
             }
             // Portfolio query detection
@@ -463,10 +714,11 @@ class ChatService {
                 console.log('[chatWithOpenAI] Routing to: trending service');
                 try {
                     const trendingTokens = await this.trendingService.getTrending(10);
-                    const trendingPrompt = this.formatTrendingTokens(trendingTokens);
+                    const conversationalResponse = await this.generateConversationalTrendingResponse(trendingTokens, message);
                     return {
-                        prompt: trendingPrompt,
-                        action: 'trending'
+                        prompt: conversationalResponse,
+                        action: 'trending',
+                        tokens: trendingTokens // Include raw data for frontend
                     };
                 }
                 catch (error) {
@@ -501,6 +753,43 @@ class ChatService {
             const isTradingQuestion = this.isGeneralTradingQuestion(message);
             const isAnalysisQuestion = this.isMarketAnalysisQuestion(message);
             const isGeneralChatQuestion = this.isGeneralChat(message);
+            const isGeneralQuestion = this.isGeneralQuestion(message);
+            // === RAG INTEGRATION ===
+            // If it's a general question (not actionable), try RAG first
+            if (isGeneralQuestion && !isTradingQuestion && !isAnalysisQuestion) {
+                console.log('[chatWithOpenAI] Attempting RAG for general question');
+                try {
+                    // Extract entities for better RAG context
+                    const entities = await this.entityExtractor.extractEntities(message, 'general');
+                    const ragResult = await this.ragService.answerQuestion(message, entities, context);
+                    console.log('[chatWithOpenAI] RAG result:', {
+                        source: ragResult.source,
+                        confidence: ragResult.confidence,
+                        haveKB: ragResult.metadata.haveKB
+                    });
+                    // If RAG found good knowledge base results, use them
+                    if (ragResult.source === 'knowledge_base' && ragResult.confidence > 0.6) {
+                        return {
+                            prompt: ragResult.answer,
+                            action: 'rag_answer',
+                            sources: ragResult.sources,
+                            metadata: ragResult.metadata
+                        };
+                    }
+                    // If RAG fell back to OpenAI but it's a general question, use that result
+                    else if (ragResult.source === 'openai_fallback' && isGeneralQuestion) {
+                        return {
+                            prompt: ragResult.answer,
+                            action: 'general_answer',
+                            metadata: ragResult.metadata
+                        };
+                    }
+                }
+                catch (error) {
+                    console.error('[chatWithOpenAI] RAG failed, falling back to regular flow:', error);
+                    // Continue to regular flow
+                }
+            }
             if (!isSolanaRelated && !isTradingQuestion && !isAnalysisQuestion && !isGeneralChatQuestion) {
                 return { prompt: "I'm here to help with Solana and SPL token questions. Ask me anything about Solana DeFi, trading, or token analysis!" };
             }

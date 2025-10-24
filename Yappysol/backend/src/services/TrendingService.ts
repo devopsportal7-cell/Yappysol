@@ -7,7 +7,7 @@ export class TrendingService {
       
       const { data: trendingTokens, error } = await supabase
         .from('trending_tokens_current')
-        .select('rank, mint, name, symbol, price_str, pct_change')
+        .select('rank, mint, name, symbol, price_str, pct_change, image_url, solscan_url, updated_at')
         .order('rank', { ascending: true })
         .limit(limit);
 
@@ -35,7 +35,10 @@ export class TrendingService {
           h24: 'N/A' // Not available in your table
         },
         address: token.mint,
-        rank: token.rank
+        rank: token.rank,
+        imageUrl: token.image_url,
+        solscanUrl: token.solscan_url,
+        updatedAt: token.updated_at
       }));
     } catch (error) {
       console.error('[TrendingService] Error fetching trending tokens:', error);
