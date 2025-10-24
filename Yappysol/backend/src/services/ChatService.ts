@@ -5,9 +5,6 @@ import { UserPortfolioService } from './UserPortfolioService';
 import { TokenSwapService } from './TokenSwapService';
 import { TokenCreationService } from './TokenCreationService';
 import { TrendingService } from './TrendingService';
-import { AdvisorService } from './AdvisorService';
-import { classifyAdvisor } from './AdvisorIntent';
-import { SolanaExpertService } from './SolanaExpertService';
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
@@ -17,8 +14,6 @@ export class ChatService {
   private tokenSwapService: TokenSwapService;
   private tokenCreationService: TokenCreationService;
   private trendingService: TrendingService;
-  private advisorService: AdvisorService;
-  private solanaExpertService: SolanaExpertService;
 
   constructor() {
     this.tokenPriceService = new TokenPriceService();
@@ -26,8 +21,6 @@ export class ChatService {
     this.tokenSwapService = new TokenSwapService();
     this.tokenCreationService = new TokenCreationService();
     this.trendingService = new TrendingService();
-    this.advisorService = new AdvisorService();
-    this.solanaExpertService = new SolanaExpertService();
   }
 
   public isPriceQuery(message: string): boolean {
@@ -354,11 +347,12 @@ export class ChatService {
   }
 
   async chatWithOpenAI(message: string, context: any = {}) {
-    console.log('[chatWithOpenAI] Received message:', message);
-    console.log('[chatWithOpenAI] Context:', context);
-    console.log('[chatWithOpenAI] context.currentStep:', context.currentStep);
-    console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
-    console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
+    try {
+      console.log('[chatWithOpenAI] Received message:', message);
+      console.log('[chatWithOpenAI] Context:', context);
+      console.log('[chatWithOpenAI] context.currentStep:', context.currentStep);
+      console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
+      console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
     
       // Check if we're in a step flow - this takes priority over intent detection
       if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
@@ -478,35 +472,6 @@ export class ChatService {
       } catch (error) {
         console.error('Error handling token creation intent:', error);
         return { prompt: "Sorry, I couldn't process your token creation request. Please try again." };
-      }
-    }
-    
-    // Solana Expert intents (transaction explanation, account analysis, SPL questions, etc.)
-    const sme = await this.solanaExpertService.answer(message);
-    if (sme) return sme; // { action: 'solana-expert', ... }
-    
-    // Advisor intents (research / compare / buy-sell ideas)
-    const adv = classifyAdvisor(message);
-    if (adv) {
-      if (adv.kind === 'token_research') {
-        const card = await this.advisorService.researchOne(adv.symbols[0] ?? 'SOL', adv.risk);
-        return {
-          action: 'advisor-research',
-          prompt: `Research for ${card.symbol} (score ${card.compositeScore}/100).`,
-          advisor: { mode: 'research', card },
-          disclaimer: 'Educational market research, not financial advice.',
-          dataTimeUTC: card.dataTimeUTC
-        };
-      }
-      if (adv.kind === 'token_compare' || adv.kind === 'what_to_buy_sell') {
-        const res = await this.advisorService.compare(adv.symbols, adv.risk);
-        return {
-          action: 'advisor-compare',
-          prompt: `Ranked ideas (${adv.risk}). Top: ${res.ranked.slice(0,3).map(r=>r.symbol).join(', ')}.`,
-          advisor: { mode: 'compare', ...res },
-          disclaimer: 'Educational market research, not financial advice.',
-          dataTimeUTC: new Date().toISOString()
-        };
       }
     }
     
@@ -644,6 +609,13 @@ export class ChatService {
     });
     const content = completion.choices?.[0]?.message?.content || 'No response from assistant.';
     return { prompt: content };
+    } catch (error) {
+      console.error('[chatWithOpenAI] Error:', error);
+      return { 
+        prompt: "I encountered an error processing your request. Please try again.",
+        action: 'error'
+      };
+    }
   }
 
   async chatWithDeepSeek(message: string, context: any = {}) {

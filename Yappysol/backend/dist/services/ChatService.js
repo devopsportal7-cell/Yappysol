@@ -11,9 +11,6 @@ const UserPortfolioService_1 = require("./UserPortfolioService");
 const TokenSwapService_1 = require("./TokenSwapService");
 const TokenCreationService_1 = require("./TokenCreationService");
 const TrendingService_1 = require("./TrendingService");
-const AdvisorService_1 = require("./AdvisorService");
-const AdvisorIntent_1 = require("./AdvisorIntent");
-const SolanaExpertService_1 = require("./SolanaExpertService");
 const openai = process.env.OPENAI_API_KEY ? new openai_1.default({ apiKey: process.env.OPENAI_API_KEY }) : null;
 class ChatService {
     constructor() {
@@ -22,8 +19,6 @@ class ChatService {
         this.tokenSwapService = new TokenSwapService_1.TokenSwapService();
         this.tokenCreationService = new TokenCreationService_1.TokenCreationService();
         this.trendingService = new TrendingService_1.TrendingService();
-        this.advisorService = new AdvisorService_1.AdvisorService();
-        this.solanaExpertService = new SolanaExpertService_1.SolanaExpertService();
     }
     isPriceQuery(message) {
         const priceKeywords = [
@@ -328,43 +323,95 @@ class ChatService {
         return prompt;
     }
     async chatWithOpenAI(message, context = {}) {
-        console.log('[chatWithOpenAI] Received message:', message);
-        console.log('[chatWithOpenAI] Context:', context);
-        console.log('[chatWithOpenAI] context.currentStep:', context.currentStep);
-        console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
-        console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
-        // Check if we're in a step flow - this takes priority over intent detection
-        if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
-            console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
-            // Determine which service to route to based on the step
-            // Token creation steps (more specific, check first)
-            if (context.currentStep === 'image' || context.currentStep === 'name' ||
-                context.currentStep === 'symbol' || context.currentStep === 'description' ||
-                context.currentStep === 'twitter' || context.currentStep === 'telegram' ||
-                context.currentStep === 'website' || context.currentStep === 'pool' ||
-                context.currentStep === 'amount' || context.currentStep === 'confirmation') {
-                console.log('[chatWithOpenAI] Routing to: token creation service (step continuation)');
-                try {
-                    const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
-                    if (!creationResult) {
-                        return { prompt: 'Token creation process interrupted. Please start over.', step: null };
+        try {
+            console.log('[chatWithOpenAI] Received message:', message);
+            console.log('[chatWithOpenAI] Context:', context);
+            console.log('[chatWithOpenAI] context.currentStep:', context.currentStep);
+            console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
+            console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
+            // Check if we're in a step flow - this takes priority over intent detection
+            if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
+                console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
+                // Determine which service to route to based on the step
+                // Token creation steps (more specific, check first)
+                if (context.currentStep === 'image' || context.currentStep === 'name' ||
+                    context.currentStep === 'symbol' || context.currentStep === 'description' ||
+                    context.currentStep === 'twitter' || context.currentStep === 'telegram' ||
+                    context.currentStep === 'website' || context.currentStep === 'pool' ||
+                    context.currentStep === 'amount' || context.currentStep === 'confirmation') {
+                    console.log('[chatWithOpenAI] Routing to: token creation service (step continuation)');
+                    try {
+                        const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
+                        if (!creationResult) {
+                            return { prompt: 'Token creation process interrupted. Please start over.', step: null };
+                        }
+                        return {
+                            prompt: creationResult.prompt,
+                            step: creationResult.step,
+                            action: 'create-token',
+                            unsignedTransaction: creationResult.unsignedTransaction,
+                            requireSignature: creationResult.requireSignature,
+                            tokenDetails: creationResult.tokenDetails
+                        };
                     }
-                    return {
-                        prompt: creationResult.prompt,
-                        step: creationResult.step,
-                        action: 'create-token',
-                        unsignedTransaction: creationResult.unsignedTransaction,
-                        requireSignature: creationResult.requireSignature,
-                        tokenDetails: creationResult.tokenDetails
-                    };
+                    catch (error) {
+                        console.error('[chatWithOpenAI] Error in token creation step continuation:', error);
+                        return { prompt: 'Sorry, I encountered an error processing your token creation request. Please try again.', step: null };
+                    }
                 }
-                catch (error) {
-                    console.error('[chatWithOpenAI] Error in token creation step continuation:', error);
-                    return { prompt: 'Sorry, I encountered an error processing your token creation request. Please try again.', step: null };
+                if (context.currentStep === 'fromToken' || context.currentStep === 'toToken') {
+                    console.log('[chatWithOpenAI] Routing to: swap service (step continuation)');
+                    try {
+                        const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
+                        return {
+                            prompt: swapResult.prompt,
+                            step: swapResult.step,
+                            action: 'swap',
+                            unsignedTransaction: swapResult.unsignedTransaction,
+                            requireSignature: swapResult.requireSignature,
+                            swapDetails: swapResult.swapDetails
+                        };
+                    }
+                    catch (error) {
+                        console.error('[chatWithOpenAI] Error in swap step continuation:', error);
+                        return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
+                    }
                 }
             }
-            if (context.currentStep === 'fromToken' || context.currentStep === 'toToken') {
-                console.log('[chatWithOpenAI] Routing to: swap service (step continuation)');
+            // Special: Bot capability intent
+            if (this.isBotCapabilityQuery(message)) {
+                return {
+                    prompt: `🚀 **Welcome to Soltikka**\n\nYour AI-Powered Solana Assistant\n\nSoltikka empowers your crypto journey with powerful chat commands:\n\n🔄 **Token Swaps & Liquidity**\nEasily swap tokens and manage liquidity positions\n\n🎨 **Token Creation & Tracking**\nLaunch your own token or track existing collections\n\n📈 **Portfolio Monitoring**\nTrack your assets and get real-time price updates\n\n💬 **Natural Language DeFi**\nInteract with DeFi protocols using plain English\n\n**Quick Start Commands:**\n- "Create a token"\n- "Swap token"\n- "What is the price of BONK?"\n\n🔒 **Security First:** All actions require wallet confirmation. Soltikka never holds your funds.`
+                };
+            }
+            // Portfolio query detection
+            if (this.isPortfolioQuery(message)) {
+                const walletAddress = context.walletAddress || (context.user && context.user.walletAddress);
+                if (!walletAddress) {
+                    return { prompt: 'Please connect your wallet to view your portfolio.' };
+                }
+                console.log('[chatWithOpenAI] Routing to: portfolio service');
+                const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
+                return { prompt: portfolioMsg };
+            }
+            // Price query detection
+            if (this.isPriceQuery(message)) {
+                try {
+                    console.log('[chatWithOpenAI] Routing to: price service');
+                    const priceResponse = await this.tokenPriceService.handlePriceQuery(message);
+                    return { prompt: priceResponse.prompt };
+                }
+                catch (error) {
+                    console.error('Error handling price query:', error);
+                    return { prompt: "Sorry, I couldn't fetch the price information at the moment. Please try again later." };
+                }
+            }
+            // Swap intent detection
+            console.log('[chatWithOpenAI] Checking swap intent for message:', message);
+            const isSwap = this.isSwapIntent(message);
+            console.log('[chatWithOpenAI] Is swap intent:', isSwap);
+            if (isSwap) {
+                console.log('[chatWithOpenAI] Routing to: swap service');
                 try {
                     const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
                     return {
@@ -377,166 +424,87 @@ class ChatService {
                     };
                 }
                 catch (error) {
-                    console.error('[chatWithOpenAI] Error in swap step continuation:', error);
-                    return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
+                    console.error('Error handling swap intent:', error);
+                    return { prompt: "Sorry, I couldn't process your swap request. Please try again." };
                 }
             }
-        }
-        // Special: Bot capability intent
-        if (this.isBotCapabilityQuery(message)) {
-            return {
-                prompt: `🚀 **Welcome to Soltikka**\n\nYour AI-Powered Solana Assistant\n\nSoltikka empowers your crypto journey with powerful chat commands:\n\n🔄 **Token Swaps & Liquidity**\nEasily swap tokens and manage liquidity positions\n\n🎨 **Token Creation & Tracking**\nLaunch your own token or track existing collections\n\n📈 **Portfolio Monitoring**\nTrack your assets and get real-time price updates\n\n💬 **Natural Language DeFi**\nInteract with DeFi protocols using plain English\n\n**Quick Start Commands:**\n- "Create a token"\n- "Swap token"\n- "What is the price of BONK?"\n\n🔒 **Security First:** All actions require wallet confirmation. Soltikka never holds your funds.`
-            };
-        }
-        // Portfolio query detection
-        if (this.isPortfolioQuery(message)) {
-            const walletAddress = context.walletAddress || (context.user && context.user.walletAddress);
-            if (!walletAddress) {
-                return { prompt: 'Please connect your wallet to view your portfolio.' };
-            }
-            console.log('[chatWithOpenAI] Routing to: portfolio service');
-            const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
-            return { prompt: portfolioMsg };
-        }
-        // Price query detection
-        if (this.isPriceQuery(message)) {
-            try {
-                console.log('[chatWithOpenAI] Routing to: price service');
-                const priceResponse = await this.tokenPriceService.handlePriceQuery(message);
-                return { prompt: priceResponse.prompt };
-            }
-            catch (error) {
-                console.error('Error handling price query:', error);
-                return { prompt: "Sorry, I couldn't fetch the price information at the moment. Please try again later." };
-            }
-        }
-        // Swap intent detection
-        console.log('[chatWithOpenAI] Checking swap intent for message:', message);
-        const isSwap = this.isSwapIntent(message);
-        console.log('[chatWithOpenAI] Is swap intent:', isSwap);
-        if (isSwap) {
-            console.log('[chatWithOpenAI] Routing to: swap service');
-            try {
-                const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
-                return {
-                    prompt: swapResult.prompt,
-                    step: swapResult.step,
-                    action: 'swap',
-                    unsignedTransaction: swapResult.unsignedTransaction,
-                    requireSignature: swapResult.requireSignature,
-                    swapDetails: swapResult.swapDetails
-                };
-            }
-            catch (error) {
-                console.error('Error handling swap intent:', error);
-                return { prompt: "Sorry, I couldn't process your swap request. Please try again." };
-            }
-        }
-        // Create token intent detection
-        if (this.isCreateTokenIntent(message)) {
-            console.log('[chatWithOpenAI] Routing to: token creation service');
-            try {
-                const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
-                if (!creationResult) {
+            // Create token intent detection
+            if (this.isCreateTokenIntent(message)) {
+                console.log('[chatWithOpenAI] Routing to: token creation service');
+                try {
+                    const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
+                    if (!creationResult) {
+                        return { prompt: "Sorry, I couldn't process your token creation request. Please try again." };
+                    }
+                    return {
+                        prompt: creationResult.prompt,
+                        step: creationResult.step,
+                        action: 'create-token',
+                        unsignedTransaction: creationResult.unsignedTransaction,
+                        requireSignature: creationResult.requireSignature,
+                        tokenDetails: creationResult.tokenDetails
+                    };
+                }
+                catch (error) {
+                    console.error('Error handling token creation intent:', error);
                     return { prompt: "Sorry, I couldn't process your token creation request. Please try again." };
                 }
-                return {
-                    prompt: creationResult.prompt,
-                    step: creationResult.step,
-                    action: 'create-token',
-                    unsignedTransaction: creationResult.unsignedTransaction,
-                    requireSignature: creationResult.requireSignature,
-                    tokenDetails: creationResult.tokenDetails
-                };
             }
-            catch (error) {
-                console.error('Error handling token creation intent:', error);
-                return { prompt: "Sorry, I couldn't process your token creation request. Please try again." };
+            // Trending/general intent detection
+            if (this.isTrendingQuery(message)) {
+                console.log('[chatWithOpenAI] Routing to: trending service');
+                try {
+                    const trendingTokens = await this.trendingService.getTrending(10);
+                    const trendingPrompt = this.formatTrendingTokens(trendingTokens);
+                    return {
+                        prompt: trendingPrompt,
+                        action: 'trending'
+                    };
+                }
+                catch (error) {
+                    console.error('Error handling trending intent:', error);
+                    return { prompt: "Sorry, I couldn't fetch trending tokens at the moment. Please try again later." };
+                }
             }
-        }
-        // Solana Expert intents (transaction explanation, account analysis, SPL questions, etc.)
-        const sme = await this.solanaExpertService.answer(message);
-        if (sme)
-            return sme; // { action: 'solana-expert', ... }
-        // Advisor intents (research / compare / buy-sell ideas)
-        const adv = (0, AdvisorIntent_1.classifyAdvisor)(message);
-        if (adv) {
-            if (adv.kind === 'token_research') {
-                const card = await this.advisorService.researchOne(adv.symbols[0] ?? 'SOL', adv.risk);
-                return {
-                    action: 'advisor-research',
-                    prompt: `Research for ${card.symbol} (score ${card.compositeScore}/100).`,
-                    advisor: { mode: 'research', card },
-                    disclaimer: 'Educational market research, not financial advice.',
-                    dataTimeUTC: card.dataTimeUTC
-                };
+            // If a custom system prompt is provided (e.g., degen personality), always use it and skip Solana keyword check
+            if (context.systemPrompt) {
+                if (!openai) {
+                    return { prompt: 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.' };
+                }
+                const messages = [
+                    { role: 'system', content: context.systemPrompt },
+                    ...(context.messages || [])
+                        .filter((m) => typeof m.content === 'string')
+                        .map((m) => ({ role: m.role, content: m.content })),
+                    { role: 'user', content: message }
+                ];
+                const completion = await openai.chat.completions.create({
+                    model: 'gpt-3.5-turbo',
+                    messages,
+                });
+                const content = completion.choices?.[0]?.message?.content || 'No response from assistant.';
+                return { prompt: content };
             }
-            if (adv.kind === 'token_compare' || adv.kind === 'what_to_buy_sell') {
-                const res = await this.advisorService.compare(adv.symbols, adv.risk);
-                return {
-                    action: 'advisor-compare',
-                    prompt: `Ranked ideas (${adv.risk}). Top: ${res.ranked.slice(0, 3).map(r => r.symbol).join(', ')}.`,
-                    advisor: { mode: 'compare', ...res },
-                    disclaimer: 'Educational market research, not financial advice.',
-                    dataTimeUTC: new Date().toISOString()
-                };
+            // Enhanced intent detection for smarter responses
+            const solanaKeywords = ['solana', 'spl', 'defi', 'token', 'coin', 'protocol', 'wallet', 'nft', 'jupiter', 'pump.fun', 'magic eden', 'dex', 'solscan', 'blockchain', 'crypto', 'trading', 'investment', 'market', 'price', 'analysis'];
+            const lowerMessage = message.toLowerCase();
+            const isSolanaRelated = solanaKeywords.some(keyword => lowerMessage.includes(keyword));
+            // Check for specific types of questions that need enhanced responses
+            const isTradingQuestion = this.isGeneralTradingQuestion(message);
+            const isAnalysisQuestion = this.isMarketAnalysisQuestion(message);
+            const isGeneralChatQuestion = this.isGeneralChat(message);
+            if (!isSolanaRelated && !isTradingQuestion && !isAnalysisQuestion && !isGeneralChatQuestion) {
+                return { prompt: "I'm here to help with Solana and SPL token questions. Ask me anything about Solana DeFi, trading, or token analysis!" };
             }
-        }
-        // Trending/general intent detection
-        if (this.isTrendingQuery(message)) {
-            console.log('[chatWithOpenAI] Routing to: trending service');
-            try {
-                const trendingTokens = await this.trendingService.getTrending(10);
-                const trendingPrompt = this.formatTrendingTokens(trendingTokens);
-                return {
-                    prompt: trendingPrompt,
-                    action: 'trending'
-                };
-            }
-            catch (error) {
-                console.error('Error handling trending intent:', error);
-                return { prompt: "Sorry, I couldn't fetch trending tokens at the moment. Please try again later." };
-            }
-        }
-        // If a custom system prompt is provided (e.g., degen personality), always use it and skip Solana keyword check
-        if (context.systemPrompt) {
+            // Otherwise, always answer in the context of Solana/SPL/DeFi with enhanced intelligence
+            console.log('[chatWithOpenAI] Routing to: enhanced general chat (OpenAI, Solana context)');
             if (!openai) {
-                return { prompt: 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.' };
+                return {
+                    prompt: 'I\'m Soltikka, your Solana DeFi assistant! I can help you with token swaps, portfolio tracking, trending tokens, and more. However, I need an OpenAI API key to provide detailed responses. Please set the OPENAI_API_KEY environment variable.'
+                };
             }
-            const messages = [
-                { role: 'system', content: context.systemPrompt },
-                ...(context.messages || [])
-                    .filter((m) => typeof m.content === 'string')
-                    .map((m) => ({ role: m.role, content: m.content })),
-                { role: 'user', content: message }
-            ];
-            const completion = await openai.chat.completions.create({
-                model: 'gpt-3.5-turbo',
-                messages,
-            });
-            const content = completion.choices?.[0]?.message?.content || 'No response from assistant.';
-            return { prompt: content };
-        }
-        // Enhanced intent detection for smarter responses
-        const solanaKeywords = ['solana', 'spl', 'defi', 'token', 'coin', 'protocol', 'wallet', 'nft', 'jupiter', 'pump.fun', 'magic eden', 'dex', 'solscan', 'blockchain', 'crypto', 'trading', 'investment', 'market', 'price', 'analysis'];
-        const lowerMessage = message.toLowerCase();
-        const isSolanaRelated = solanaKeywords.some(keyword => lowerMessage.includes(keyword));
-        // Check for specific types of questions that need enhanced responses
-        const isTradingQuestion = this.isGeneralTradingQuestion(message);
-        const isAnalysisQuestion = this.isMarketAnalysisQuestion(message);
-        const isGeneralChatQuestion = this.isGeneralChat(message);
-        if (!isSolanaRelated && !isTradingQuestion && !isAnalysisQuestion && !isGeneralChatQuestion) {
-            return { prompt: "I'm here to help with Solana and SPL token questions. Ask me anything about Solana DeFi, trading, or token analysis!" };
-        }
-        // Otherwise, always answer in the context of Solana/SPL/DeFi with enhanced intelligence
-        console.log('[chatWithOpenAI] Routing to: enhanced general chat (OpenAI, Solana context)');
-        if (!openai) {
-            return {
-                prompt: 'I\'m Soltikka, your Solana DeFi assistant! I can help you with token swaps, portfolio tracking, trending tokens, and more. However, I need an OpenAI API key to provide detailed responses. Please set the OPENAI_API_KEY environment variable.'
-            };
-        }
-        // Enhanced system prompt for intelligent Solana trading advice and analysis
-        let systemPrompt = `You are Soltikka, an expert Solana DeFi trading assistant and blockchain analyst. You are highly knowledgeable about:
+            // Enhanced system prompt for intelligent Solana trading advice and analysis
+            let systemPrompt = `You are Soltikka, an expert Solana DeFi trading assistant and blockchain analyst. You are highly knowledgeable about:
 
 🔹 **Solana Ecosystem**: All major protocols, DEXs, and projects
 🔹 **Trading & Analysis**: Technical analysis, market trends, risk assessment
@@ -562,51 +530,59 @@ class ChatService {
 - Be honest about market uncertainties
 
 **Always focus on Solana ecosystem** but provide comprehensive, intelligent analysis that helps users make informed decisions. If asked about general crypto concepts, relate them to Solana's implementation and advantages.`;
-        // Add context-specific instructions based on the type of question
-        if (isTradingQuestion) {
-            systemPrompt += `\n\n**TRADING ADVICE MODE**: The user is asking for trading advice. Provide detailed analysis including:
+            // Add context-specific instructions based on the type of question
+            if (isTradingQuestion) {
+                systemPrompt += `\n\n**TRADING ADVICE MODE**: The user is asking for trading advice. Provide detailed analysis including:
 - Current market conditions and sentiment
 - Risk assessment and potential outcomes
 - Specific entry/exit strategies if applicable
 - Market timing considerations
 - Risk management recommendations
 - Always include appropriate disclaimers about market risks`;
-        }
-        if (isAnalysisQuestion) {
-            systemPrompt += `\n\n**ANALYSIS MODE**: The user wants detailed analysis. Provide comprehensive insights including:
+            }
+            if (isAnalysisQuestion) {
+                systemPrompt += `\n\n**ANALYSIS MODE**: The user wants detailed analysis. Provide comprehensive insights including:
 - Technical analysis with specific indicators
 - Fundamental analysis of tokenomics and utility
 - Market positioning and competitive advantages
 - Risk factors and potential red flags
 - Long-term viability assessment
 - Specific metrics and data points`;
-        }
-        if (isGeneralChatQuestion) {
-            systemPrompt += `\n\n**CONVERSATIONAL MODE**: The user is having a general conversation. Be friendly and helpful while:
+            }
+            if (isGeneralChatQuestion) {
+                systemPrompt += `\n\n**CONVERSATIONAL MODE**: The user is having a general conversation. Be friendly and helpful while:
 - Maintaining focus on Solana and DeFi topics
 - Providing educational content when appropriate
 - Being encouraging for beginners
 - Offering to help with specific questions
 - Sharing interesting Solana ecosystem insights`;
+            }
+            // Get market context for enhanced responses
+            const marketContext = await this.getMarketContext();
+            const enhancedMessage = marketContext + message;
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                ...(context.messages || [])
+                    .filter((m) => typeof m.content === 'string')
+                    .map((m) => ({ role: m.role, content: m.content })),
+                { role: 'user', content: enhancedMessage }
+            ];
+            const completion = await openai.chat.completions.create({
+                model: 'gpt-4', // Using GPT-4 for better analysis capabilities
+                messages,
+                temperature: 0.7, // Slightly creative but focused
+                max_tokens: 1000, // Allow for detailed responses
+            });
+            const content = completion.choices?.[0]?.message?.content || 'No response from assistant.';
+            return { prompt: content };
         }
-        // Get market context for enhanced responses
-        const marketContext = await this.getMarketContext();
-        const enhancedMessage = marketContext + message;
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            ...(context.messages || [])
-                .filter((m) => typeof m.content === 'string')
-                .map((m) => ({ role: m.role, content: m.content })),
-            { role: 'user', content: enhancedMessage }
-        ];
-        const completion = await openai.chat.completions.create({
-            model: 'gpt-4', // Using GPT-4 for better analysis capabilities
-            messages,
-            temperature: 0.7, // Slightly creative but focused
-            max_tokens: 1000, // Allow for detailed responses
-        });
-        const content = completion.choices?.[0]?.message?.content || 'No response from assistant.';
-        return { prompt: content };
+        catch (error) {
+            console.error('[chatWithOpenAI] Error:', error);
+            return {
+                prompt: "I encountered an error processing your request. Please try again.",
+                action: 'error'
+            };
+        }
     }
     async chatWithDeepSeek(message, context = {}) {
         console.log('[chatWithDeepSeek] Received message:', message);
