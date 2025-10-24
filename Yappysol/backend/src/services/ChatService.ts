@@ -798,9 +798,10 @@ Be enthusiastic about the Solana ecosystem!`;
     const isGeneralQuestion = this.isGeneralQuestion(message);
     
     // === RAG INTEGRATION ===
-    // If it's a general question (not actionable), try RAG first
-    if (isGeneralQuestion && !isTradingQuestion && !isAnalysisQuestion) {
-      console.log('[chatWithOpenAI] Attempting RAG for general question');
+    // Try RAG first for ALL questions (including trading questions)
+    // This ensures we get the enhanced fallback response for investment questions
+    if (isGeneralQuestion || isTradingQuestion || isAnalysisQuestion) {
+      console.log('[chatWithOpenAI] Attempting RAG for question (general/trading/analysis)');
       try {
         // Extract entities for better RAG context
         const entities = await this.entityExtractor.extractEntities(message, 'general');
@@ -821,7 +822,7 @@ Be enthusiastic about the Solana ecosystem!`;
             metadata: ragResult.metadata
           };
         }
-        // If RAG fell back to OpenAI, always use that result (regardless of question type)
+        // If RAG fell back to OpenAI, always use that result (this is the key fix!)
         else if (ragResult.source === 'openai_fallback') {
           return { 
             prompt: ragResult.answer,
