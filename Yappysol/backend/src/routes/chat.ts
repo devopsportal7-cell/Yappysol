@@ -3,6 +3,7 @@ import { authMiddleware } from '../middlewares/authMiddleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ChatService } from '../services/ChatService';
 import { TokenCreationService } from '../services/TokenCreationService';
+import { TokenSwapService } from '../services/TokenSwapService';
 import { ChatSessionModel } from '../models/ChatSessionSupabase';
 import multer from 'multer';
 
@@ -78,7 +79,6 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
         }
       } else if (enhancedContext.currentStep === 'fromToken' || enhancedContext.currentStep === 'toToken') {
         console.log('[CHAT] Routing to: swap service (step continuation)');
-        const { TokenSwapService } = require('../services/TokenSwapService');
         const swapService = new TokenSwapService();
         response = await swapService.handleSwapIntent(message, enhancedContext);
         if (response) {

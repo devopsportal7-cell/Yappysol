@@ -8,6 +8,7 @@ const authMiddleware_1 = require("../middlewares/authMiddleware");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const ChatService_1 = require("../services/ChatService");
 const TokenCreationService_1 = require("../services/TokenCreationService");
+const TokenSwapService_1 = require("../services/TokenSwapService");
 const ChatSessionSupabase_1 = require("../models/ChatSessionSupabase");
 const multer_1 = __importDefault(require("multer"));
 const router = (0, express_1.Router)();
@@ -72,8 +73,7 @@ router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
             }
             else if (enhancedContext.currentStep === 'fromToken' || enhancedContext.currentStep === 'toToken') {
                 console.log('[CHAT] Routing to: swap service (step continuation)');
-                const { TokenSwapService } = require('../services/TokenSwapService');
-                const swapService = new TokenSwapService();
+                const swapService = new TokenSwapService_1.TokenSwapService();
                 response = await swapService.handleSwapIntent(message, enhancedContext);
                 if (response) {
                     response.action = 'swap';
