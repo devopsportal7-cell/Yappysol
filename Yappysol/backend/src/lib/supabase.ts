@@ -25,5 +25,8 @@ export const TABLES = {
   API_KEYS: 'api_keys',
   USER_SESSIONS: 'user_sessions',
   WHITELISTED_ADDRESSES: 'whitelisted_addresses',
-  PASSWORD_RESET_TOKENS: 'password_reset_tokens'
+  PASSWORD_RESET_TOKENS: 'password_reset_tokens',
+  TOKEN_LAUNCHES: 'token_launches',
+  TOKEN_PRICES: 'token_prices',
+  USER_TOKEN_HOLDINGS: 'user_token_holdings'
 } as const;

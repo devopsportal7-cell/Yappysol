@@ -1,5 +1,33 @@
 # Lovable Implementation Instructions
 
+## 🚨 CRITICAL FIX REQUIRED - 404 Errors
+
+**IMMEDIATE ACTION NEEDED**: The frontend is currently getting 404 errors because it's calling the wrong API endpoints. 
+
+### Current Problem:
+- Frontend is calling: `/chat/sessions/.../new` and `/chat/sessions/...`
+- Backend expects: `/api/chat/sessions` and `/api/chat/sessions/:id`
+
+### Fix Required:
+Update ALL API calls in your frontend to include the `/api` prefix:
+
+```typescript
+// WRONG (current):
+fetch('/chat/sessions')
+fetch('/chat/sessions/new')
+
+// CORRECT (fix to):
+fetch('/api/chat/sessions')
+fetch('/api/chat/sessions')
+```
+
+### Specific Files to Update:
+1. **Chat session API calls** - Add `/api` prefix
+2. **Message sending** - Ensure it calls `/api/chat/message`
+3. **Any other chat-related API calls** - Add `/api` prefix
+
+This is causing the 404 errors you're seeing in the console. Fix this first before implementing other features.
+
 ## Overview
 This document provides instructions for implementing chat history functionality and fixing the RAG fallback system in the Yappysol frontend.
 
@@ -505,3 +533,54 @@ Add these styles for the chat history sidebar:
 5. **Testing**: Verify RAG fallback works correctly
 
 This implementation will provide users with persistent chat history while maintaining all existing functionality including multi-step flows and proper AI responses.
+
+## 9. Troubleshooting Common Issues
+
+### 404 Errors on Session Endpoints
+**Problem**: Console shows `Failed to load resource: the server responded with a status of 404`
+**Solution**: Ensure all API calls include `/api` prefix:
+- `/chat/sessions` → `/api/chat/sessions`
+- `/chat/sessions/:id` → `/api/chat/sessions/:id`
+
+### Session Creation Failing
+**Problem**: `useChatSession: Failed to create session, using fallback mode`
+**Solution**: 
+1. Check API endpoint URLs have `/api` prefix
+2. Verify authentication token is being sent
+3. Check network tab for actual request/response
+
+### Messages Not Persisting
+**Problem**: Messages only stored locally, not on server
+**Solution**:
+1. Fix API endpoint URLs first
+2. Ensure sessionId is being passed correctly
+3. Check backend logs for errors
+
+### Multi-Step Flows Breaking
+**Problem**: Token creation or swap flows not continuing
+**Solution**:
+1. Ensure `currentStep` and `currentAction` are preserved in context
+2. Include these in every message request
+3. Check backend logs for step continuation
+
+### Authentication Issues
+**Problem**: 401 Unauthorized errors
+**Solution**:
+1. Verify JWT token is valid and not expired
+2. Check token is being sent in Authorization header
+3. Ensure user is properly authenticated
+
+### Debug Steps:
+1. **Check Network Tab**: Look for failed requests and their status codes
+2. **Check Console**: Look for error messages and stack traces
+3. **Check Backend Logs**: Look for server-side errors
+4. **Verify API Endpoints**: Ensure URLs match backend routes exactly
+5. **Test Authentication**: Ensure user is logged in and token is valid
+
+### Quick Fix Checklist:
+- [ ] All API calls have `/api` prefix
+- [ ] Authentication token is being sent
+- [ ] SessionId is included in message requests
+- [ ] Multi-step context is preserved
+- [ ] Error handling is implemented
+- [ ] Network requests are successful (200 status)

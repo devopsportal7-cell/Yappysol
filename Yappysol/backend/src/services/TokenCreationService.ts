@@ -5,6 +5,8 @@ import fetch from 'node-fetch';
 // TEMPORARY: Importing Pinata IPFS upload from referencefile. Move to backend/src/lib/pinata.ts in production.
 import { uploadImageToIPFS as pinataUploadImageToIPFS } from '../lib/pinata';
 import { WalletService } from './WalletService';
+import { TokenLaunchModel } from '../models/TokenLaunchSupabase';
+import { tokenPriceTrackingService } from './TokenPriceTrackingService';
 
 // In-memory session store (replace with Redis in production)
 export const tokenCreationSessions: Record<string, any> = {};
@@ -858,6 +860,25 @@ export class TokenCreationService {
       throw new Error('No wallet found for user. Please create or import a wallet first.');
     }
 
+    // Create database record for the launch AFTER wallet validation
+    const launchRecord = await TokenLaunchModel.createLaunch({
+      userId: params.userId,
+      sessionId: params.sessionId,
+      tokenName: params.name,
+      tokenSymbol: params.symbol,
+      description: params.description,
+      imageUrl: params.imageUrl,
+      twitterUrl: params.twitter,
+      telegramUrl: params.telegram,
+      websiteUrl: params.website,
+      poolType: params.pool,
+      launchAmount: params.amount,
+      initialSupply: params.initialSupply,
+      decimals: params.decimals
+    });
+
+    try {
+
     // For Pump.fun: Validate user's wallet balance
     // For Bonk.fun: Skip balance validation (uses API wallet)
     if (params.pool === 'pump') {
@@ -910,9 +931,17 @@ export class TokenCreationService {
 
     // If this is a pump transaction, return unsigned transaction for user to sign
     if (result.unsignedTransaction) {
+      // Update launch record with transaction details
+      await TokenLaunchModel.updateLaunch(launchRecord.id, {
+        mintAddress: mintKeypair.publicKey.toBase58(),
+        unsignedTransaction: result.unsignedTransaction,
+        status: 'pending'
+      });
+
       return {
         unsignedTransaction: result.unsignedTransaction,
         mint: mintKeypair.publicKey.toBase58(),
+        launchId: launchRecord.id
       };
     }
 
@@ -921,6 +950,13 @@ export class TokenCreationService {
       const platform = params.pool === 'bonk' ? 'bonk.fun' : 'pump.fun';
       
       if (result.error) {
+        // Update launch record with failure
+        await TokenLaunchModel.updateLaunch(launchRecord.id, {
+          transactionSignature: result.signature,
+          status: 'failed',
+          errorMessage: result.error
+        });
+
         // Transaction failed
         let errorMessage = `❌ ${result.error}\n\n[View Transaction on Solscan](https://solscan.io/tx/${result.signature})`;
         
@@ -940,9 +976,28 @@ export class TokenCreationService {
           prompt: errorMessage,
           signature: result.signature,
           action: 'error',
-          step: null
+          step: null,
+          launchId: launchRecord.id
         };
       } else if (result.mint) {
+        // Update launch record with success
+        await TokenLaunchModel.updateLaunch(launchRecord.id, {
+          mintAddress: result.mint,
+          transactionSignature: result.signature,
+          status: 'completed'
+        });
+
+        // Start price tracking for the new token
+        setTimeout(async () => {
+          try {
+            if (result.mint) {
+              await tokenPriceTrackingService.getTokenPrice(result.mint);
+            }
+          } catch (error) {
+            console.error('[TokenCreationService] Error starting price tracking:', error);
+          }
+        }, 5000); // Wait 5 seconds for token to be available
+
         // We have the mint address
         const successMessage = `🎉 Token created successfully! [View on ${platform}](http://${platform}/coin/${result.mint}) | [View on Solscan](https://solscan.io/token/${result.mint})`;
         console.log('[DEBUG] Bonk success message with mint:', successMessage);
@@ -950,9 +1005,16 @@ export class TokenCreationService {
           prompt: successMessage,
           mint: result.mint,
           action: 'token-creation',
-          step: null
+          step: null,
+          launchId: launchRecord.id
         };
       } else {
+        // Update launch record with pending status
+        await TokenLaunchModel.updateLaunch(launchRecord.id, {
+          transactionSignature: result.signature,
+          status: 'pending'
+        });
+
         // No mint address found, provide transaction signature for manual check
         const successMessage = result.detailedMessage || `🎉 Transaction submitted successfully! Please check the transaction manually:\n\n[View Transaction on Solscan](https://solscan.io/tx/${result.signature})\n\nNote: The token may take a few minutes to appear on Solscan.`;
         console.log('[DEBUG] Bonk success message without mint:', successMessage);
@@ -960,7 +1022,8 @@ export class TokenCreationService {
           prompt: successMessage,
           signature: result.signature,
           action: 'token-creation',
-          step: null
+          step: null,
+          launchId: launchRecord.id
         };
       }
     }
@@ -970,8 +1033,26 @@ export class TokenCreationService {
       prompt: 'Token creation initiated. Please check your wallet.',
       mint: result.mint,
       action: 'token-creation',
-      step: null
+      step: null,
+      launchId: launchRecord.id
     };
+
+    } catch (error: any) {
+      // Update launch record with failure (only if record was created)
+      if (launchRecord?.id) {
+        try {
+          await TokenLaunchModel.updateLaunch(launchRecord.id, {
+            status: 'failed',
+            errorMessage: error.message
+          });
+        } catch (updateError) {
+          console.error('[TokenCreationService] Failed to update launch record:', updateError);
+        }
+      }
+
+      console.error('[TokenCreationService] Token creation failed:', error);
+      throw error;
+    }
   }
 
   async handleImageUpload(file: Express.Multer.File, context: { userId?: string }) {
