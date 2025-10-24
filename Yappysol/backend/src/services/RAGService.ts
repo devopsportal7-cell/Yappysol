@@ -67,7 +67,7 @@ export class RAGService {
         console.log('[RAGService] Using knowledge base answer');
         return await this.generateKBAnswer(query, kbSearch.results, context);
       } else {
-        console.log('[RAGService] Falling back to OpenAI');
+        console.log('[RAGService] Knowledge base insufficient, falling back to OpenAI');
         return await this.generateFallbackAnswer(query, context);
       }
 
@@ -173,17 +173,21 @@ ${chunks.join('\n---\n')}`;
 - Portfolio management and analysis
 - Market trends and token information
 - General crypto and DeFi questions
+- Investment advice and market analysis
 
 PERSONALITY:
 - Friendly, enthusiastic, and helpful
 - Use emojis occasionally but not excessively
 - Be concise but informative
+- Provide thoughtful analysis while being clear about risks
 - If you don't know something specific, admit it and suggest where they might find the information
 
 IMPORTANT:
 - Never invent contract addresses or specific technical details
 - If asked about portfolio/balance, ask which wallet/exchange they're using
-- Focus on Solana ecosystem but can help with general crypto questions`;
+- Focus on Solana ecosystem but can help with general crypto questions
+- For investment questions, provide balanced analysis including risks and considerations
+- Always remind users to do their own research (DYOR)`;
 
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',

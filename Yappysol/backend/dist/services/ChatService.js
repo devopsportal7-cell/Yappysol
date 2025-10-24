@@ -776,8 +776,8 @@ Be enthusiastic about the Solana ecosystem!`;
                             metadata: ragResult.metadata
                         };
                     }
-                    // If RAG fell back to OpenAI but it's a general question, use that result
-                    else if (ragResult.source === 'openai_fallback' && isGeneralQuestion) {
+                    // If RAG fell back to OpenAI, always use that result (regardless of question type)
+                    else if (ragResult.source === 'openai_fallback') {
                         return {
                             prompt: ragResult.answer,
                             action: 'general_answer',

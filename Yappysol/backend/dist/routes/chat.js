@@ -246,8 +246,18 @@ router.get('/sessions/:id', authMiddleware_1.authMiddleware, (0, asyncHandler_1.
     if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    // For now, return empty session since we're not using database persistence
-    res.json({ session: null });
+    try {
+        const session = await ChatSessionSupabase_1.ChatSessionModel.findById(req.params.id);
+        if (!session || session.user_id !== userId) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        console.log('[CHAT] Found session:', session.id);
+        res.json({ session });
+    }
+    catch (error) {
+        console.error('[CHAT] Error fetching session:', error);
+        res.status(500).json({ error: 'Failed to fetch chat session' });
+    }
 }));
 // Update a chat session
 router.put('/sessions/:id', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -256,14 +266,22 @@ router.put('/sessions/:id', authMiddleware_1.authMiddleware, (0, asyncHandler_1.
     if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    const { messages, customTitle } = req.body;
-    const session = {
-        id: req.params.id,
-        title: customTitle || 'Updated Chat',
-        messages: messages || [],
-        updatedAt: new Date().toISOString()
-    };
-    res.json({ session });
+    try {
+        const { messages, customTitle } = req.body;
+        const session = await ChatSessionSupabase_1.ChatSessionModel.updateSession(req.params.id, {
+            messages,
+            customTitle
+        });
+        if (!session || session.user_id !== userId) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        console.log('[CHAT] Updated session:', session.id);
+        res.json({ session });
+    }
+    catch (error) {
+        console.error('[CHAT] Error updating session:', error);
+        res.status(500).json({ error: 'Failed to update chat session' });
+    }
 }));
 // Add a message to a chat session
 router.post('/sessions/:id/messages', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -272,21 +290,27 @@ router.post('/sessions/:id/messages', authMiddleware_1.authMiddleware, (0, async
     if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    const { content, role, attachments, action } = req.body;
-    const message = {
-        id: `msg-${Date.now()}`,
-        content,
-        role,
-        attachments,
-        action,
-        createdAt: new Date().toISOString()
-    };
-    const session = {
-        id: req.params.id,
-        messages: [message],
-        updatedAt: new Date().toISOString()
-    };
-    res.json({ session });
+    try {
+        const { content, role, attachments, action } = req.body;
+        const message = {
+            id: `msg-${Date.now()}-${role}`,
+            content,
+            role,
+            attachments,
+            action,
+            created_at: new Date().toISOString()
+        };
+        const session = await ChatSessionSupabase_1.ChatSessionModel.addMessage(req.params.id, message);
+        if (!session || session.user_id !== userId) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        console.log('[CHAT] Added message to session:', session.id);
+        res.json({ session });
+    }
+    catch (error) {
+        console.error('[CHAT] Error adding message:', error);
+        res.status(500).json({ error: 'Failed to add message to session' });
+    }
 }));
 // Delete a chat session
 router.delete('/sessions/:id', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -295,6 +319,19 @@ router.delete('/sessions/:id', authMiddleware_1.authMiddleware, (0, asyncHandler
     if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
-    res.json({ success: true });
+    try {
+        // First check if session exists and belongs to user
+        const session = await ChatSessionSupabase_1.ChatSessionModel.findById(req.params.id);
+        if (!session || session.user_id !== userId) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        await ChatSessionSupabase_1.ChatSessionModel.deleteSession(req.params.id);
+        console.log('[CHAT] Deleted session:', req.params.id);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('[CHAT] Error deleting session:', error);
+        res.status(500).json({ error: 'Failed to delete chat session' });
+    }
 }));
 exports.default = router;
