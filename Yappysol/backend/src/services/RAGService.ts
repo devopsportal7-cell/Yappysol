@@ -63,11 +63,16 @@ export class RAGService {
       );
 
       // Step 3: Decide whether to use KB or fallback
-      if (kbSearch.haveKB && kbSearch.results.length > 0) {
-        console.log('[RAGService] Using knowledge base answer');
+      // Only use KB if we have high-quality results with good similarity
+      const hasGoodKBResults = kbSearch.haveKB && 
+                              kbSearch.results.length > 0 && 
+                              kbSearch.results[0]?.similarity > 0.7; // Higher threshold for quality
+      
+      if (hasGoodKBResults) {
+        console.log('[RAGService] Using knowledge base answer (high similarity)');
         return await this.generateKBAnswer(query, kbSearch.results, context);
       } else {
-        console.log('[RAGService] Knowledge base insufficient, falling back to OpenAI');
+        console.log('[RAGService] Knowledge base insufficient or low similarity, falling back to OpenAI');
         return await this.generateFallbackAnswer(query, context);
       }
 
