@@ -23,5 +23,7 @@ export const TABLES = {
   WALLETS: 'wallets',
   CHAT_SESSIONS: 'chat_sessions',
   API_KEYS: 'api_keys',
-  USER_SESSIONS: 'user_sessions'
+  USER_SESSIONS: 'user_sessions',
+  WHITELISTED_ADDRESSES: 'whitelisted_addresses',
+  PASSWORD_RESET_TOKENS: 'password_reset_tokens'
 } as const;

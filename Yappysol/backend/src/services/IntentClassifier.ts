@@ -237,26 +237,69 @@ Return ONLY valid JSON, no markdown:
   private extractSwapEntities(message: string): Record<string, any> {
     const entities: Record<string, any> = {};
     
-    // Extract token symbols (common ones)
+    // Extract amount first (more specific patterns)
+    const amountPatterns = [
+      /(\d+\.?\d*)\s+(SOL|USDC|USDT|BONK|WIF|JUP|JTO|PYTH|ORCA|RAY|tokens?)/i,
+      /swap\s+(\d+\.?\d*)\s+(SOL|USDC|USDT|BONK|WIF|JUP|JTO|PYTH|ORCA|RAY)/i,
+      /(\d+\.?\d*)\s+(SOL|USDC|USDT|BONK|WIF|JUP|JTO|PYTH|ORCA|RAY)\s+for/i
+    ];
+    
+    for (const pattern of amountPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        entities.amount = match[1];
+        // If amount is found with a token, that's likely the fromToken
+        if (match[2] && !entities.fromToken) {
+          entities.fromToken = match[2].toUpperCase();
+        }
+        break;
+      }
+    }
+    
+    // Extract token symbols (common ones) - improved logic
     const tokens = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH', 'ORCA', 'RAY'];
     const upperMessage = message.toUpperCase();
     
-    for (const token of tokens) {
-      if (upperMessage.includes(token)) {
-        if (!entities.fromToken) {
-          entities.fromToken = token;
-        } else if (!entities.toToken && token !== entities.fromToken) {
-          entities.toToken = token;
+    // Look for "for" pattern: "X for Y" or "X to Y"
+    const swapPattern = /(\w+)\s+(?:for|to)\s+(\w+)/i;
+    const swapMatch = message.match(swapPattern);
+    
+    if (swapMatch) {
+      const token1 = swapMatch[1].toUpperCase();
+      const token2 = swapMatch[2].toUpperCase();
+      
+      if (tokens.includes(token1)) {
+        entities.fromToken = token1;
+      }
+      if (tokens.includes(token2)) {
+        entities.toToken = token2;
+      }
+    } else {
+      // Fallback: find tokens in order
+      const foundTokens: string[] = [];
+      for (const token of tokens) {
+        if (upperMessage.includes(token)) {
+          foundTokens.push(token);
         }
+      }
+      
+      if (foundTokens.length >= 1) {
+        entities.fromToken = foundTokens[0];
+      }
+      if (foundTokens.length >= 2) {
+        entities.toToken = foundTokens[1];
       }
     }
 
-    // Extract amount
-    const amountMatch = message.match(/(\d+\.?\d*)\s*(SOL|USDC|BONK|tokens?)?/i);
-    if (amountMatch) {
-      entities.amount = amountMatch[1];
+    // Extract amount if not found yet
+    if (!entities.amount) {
+      const amountMatch = message.match(/(\d+\.?\d*)/);
+      if (amountMatch) {
+        entities.amount = amountMatch[1];
+      }
     }
 
+    console.log('[IntentClassifier] Extracted swap entities:', entities);
     return entities;
   }
 

@@ -143,36 +143,76 @@ Return format: {"limit": 10}`
     const commonTokens = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH', 'ORCA', 'RAY', 'SAMO', 'FIDA'];
     const upperMessage = message.toUpperCase();
     
-    // Extract tokens mentioned
-    const foundTokens: string[] = [];
-    for (const token of commonTokens) {
-      if (upperMessage.includes(token)) {
-        foundTokens.push(token);
-      }
-    }
-
-    // Assign found tokens
-    if (foundTokens.length > 0) {
-      entities.fromToken = foundTokens[0];
-    }
-    if (foundTokens.length > 1) {
-      entities.toToken = foundTokens[1];
-    }
-
-    // Extract amount - look for patterns like "5 SOL", "1.5 USDC", "100 tokens"
-    const amountPatterns = [
-      /(\d+\.?\d*)\s*(?:SOL|USDC|USDT|BONK|WIF|tokens?)/i,
-      /(?:swap|trade|exchange|convert|buy|sell)\s+(\d+\.?\d*)/i
+    // Smart pattern matching for "X for Y" or "X to Y" patterns
+    const swapPatterns = [
+      /(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i,  // "1 SOL for USDC"
+      /(\w+)\s+(?:for|to)\s+(\w+)/i,                 // "SOL for USDC"
+      /swap\s+(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "swap 1 SOL for USDC"
+      /trade\s+(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "trade 1 SOL for USDC"
+      /exchange\s+(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "exchange 1 SOL for USDC"
+      /convert\s+(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "convert 1 SOL for USDC"
+      /buy\s+(\d+\.?\d*)\s+(\w+)\s+with\s+(\w+)/i,   // "buy 100 USDC with SOL"
+      /sell\s+(\d+\.?\d*)\s+(\w+)\s+for\s+(\w+)/i    // "sell 1 SOL for USDC"
     ];
 
-    for (const pattern of amountPatterns) {
+    let foundMatch = false;
+    for (const pattern of swapPatterns) {
       const match = message.match(pattern);
-      if (match && match[1]) {
-        entities.amount = match[1];
+      if (match) {
+        // Extract amount if present
+        if (match[1] && !isNaN(parseFloat(match[1]))) {
+          entities.amount = match[1];
+        }
+        
+        // Extract tokens
+        const token1 = match[2] ? match[2].toUpperCase() : match[1].toUpperCase();
+        const token2 = match[3] ? match[3].toUpperCase() : match[2].toUpperCase();
+        
+        if (commonTokens.includes(token1)) {
+          entities.fromToken = token1;
+        }
+        if (commonTokens.includes(token2)) {
+          entities.toToken = token2;
+        }
+        
+        foundMatch = true;
         break;
       }
     }
 
+    // Fallback: if no pattern matched, try simple token detection
+    if (!foundMatch) {
+      const foundTokens: string[] = [];
+      for (const token of commonTokens) {
+        if (upperMessage.includes(token)) {
+          foundTokens.push(token);
+        }
+      }
+
+      // Assign found tokens
+      if (foundTokens.length > 0) {
+        entities.fromToken = foundTokens[0];
+      }
+      if (foundTokens.length > 1) {
+        entities.toToken = foundTokens[1];
+      }
+
+      // Extract amount - look for patterns like "5 SOL", "1.5 USDC", "100 tokens"
+      const amountPatterns = [
+        /(\d+\.?\d*)\s*(?:SOL|USDC|USDT|BONK|WIF|tokens?)/i,
+        /(?:swap|trade|exchange|convert|buy|sell)\s+(\d+\.?\d*)/i
+      ];
+
+      for (const pattern of amountPatterns) {
+        const match = message.match(pattern);
+        if (match && match[1]) {
+          entities.amount = match[1];
+          break;
+        }
+      }
+    }
+
+    console.log('[EntityExtractor] Extracted swap entities:', entities);
     return entities;
   }
 

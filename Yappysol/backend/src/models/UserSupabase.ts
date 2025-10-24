@@ -9,6 +9,8 @@ export interface User {
   username?: string | null;
   onboarding_completed: boolean;
   username_set_at?: string | null;
+  app_password_hash?: string | null; // For Privy users - app-specific password
+  app_password_set_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +28,7 @@ export interface LoginData {
 export interface UpdateUserProfileData {
   username?: string;
   onboardingCompleted?: boolean;
+  appPassword?: string;
 }
 
 export class UserModel {
@@ -151,6 +154,11 @@ export class UserModel {
       updateData.onboarding_completed = updates.onboardingCompleted;
     }
 
+    if (updates.appPassword !== undefined) {
+      updateData.app_password_hash = await bcrypt.hash(updates.appPassword, 12);
+      updateData.app_password_set_at = new Date().toISOString();
+    }
+
     const { data, error } = await supabase
       .from(TABLES.USERS)
       .update(updateData)
@@ -160,6 +168,39 @@ export class UserModel {
 
     if (error) {
       throw new Error(`Failed to update user profile: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  static async validateAppPassword(user: User, password: string): Promise<boolean> {
+    if (!user.app_password_hash) {
+      return false;
+    }
+    return await bcrypt.compare(password, user.app_password_hash);
+  }
+
+  static async hasAppPassword(userId: string): Promise<boolean> {
+    const user = await this.findById(userId);
+    return user?.app_password_hash !== null && user?.app_password_hash !== undefined;
+  }
+
+  static async setAppPassword(userId: string, password: string): Promise<User | null> {
+    const passwordHash = await bcrypt.hash(password, 12);
+    
+    const { data, error } = await supabase
+      .from(TABLES.USERS)
+      .update({
+        app_password_hash: passwordHash,
+        app_password_set_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to set app password: ${error.message}`);
     }
 
     return data;

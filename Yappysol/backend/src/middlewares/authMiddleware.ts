@@ -16,6 +16,8 @@ declare global {
         created_at?: string;
         wallet?: string;
         authType?: 'jwt' | 'privy';
+        app_password_hash?: string | null;
+        app_password_set_at?: string | null;
       };
     }
   }

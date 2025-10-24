@@ -106,6 +106,10 @@ class UserModel {
         if (updates.onboardingCompleted !== undefined) {
             updateData.onboarding_completed = updates.onboardingCompleted;
         }
+        if (updates.appPassword !== undefined) {
+            updateData.app_password_hash = await bcrypt_1.default.hash(updates.appPassword, 12);
+            updateData.app_password_set_at = new Date().toISOString();
+        }
         const { data, error } = await supabase_1.supabase
             .from(supabase_1.TABLES.USERS)
             .update(updateData)
@@ -114,6 +118,33 @@ class UserModel {
             .single();
         if (error) {
             throw new Error(`Failed to update user profile: ${error.message}`);
+        }
+        return data;
+    }
+    static async validateAppPassword(user, password) {
+        if (!user.app_password_hash) {
+            return false;
+        }
+        return await bcrypt_1.default.compare(password, user.app_password_hash);
+    }
+    static async hasAppPassword(userId) {
+        const user = await this.findById(userId);
+        return user?.app_password_hash !== null && user?.app_password_hash !== undefined;
+    }
+    static async setAppPassword(userId, password) {
+        const passwordHash = await bcrypt_1.default.hash(password, 12);
+        const { data, error } = await supabase_1.supabase
+            .from(supabase_1.TABLES.USERS)
+            .update({
+            app_password_hash: passwordHash,
+            app_password_set_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        })
+            .eq('id', userId)
+            .select()
+            .single();
+        if (error) {
+            throw new Error(`Failed to set app password: ${error.message}`);
         }
         return data;
     }
