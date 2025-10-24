@@ -9,10 +9,16 @@ router.post('/n8n-webhook', asyncHandler(async (req, res) => {
   const { session_id, user_id, text, walletRef } = req.body;
   
   console.log('[N8N] Received webhook request:', { session_id, user_id, text, walletRef });
+  console.log('[N8N] Environment check:', {
+    hasN8nUrl: !!process.env.N8N_WEBHOOK_URL,
+    hasServerKey: !!process.env.BACKEND_SERVER_KEY,
+    n8nUrl: process.env.N8N_WEBHOOK_URL ? 'SET' : 'NOT SET'
+  });
   
   // Forward to n8n webhook
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
   if (!n8nWebhookUrl) {
+    console.error('[N8N] N8N_WEBHOOK_URL not set in environment variables');
     return res.status(500).json({
       route: 'chat',
       message: 'n8n integration not configured',
@@ -21,6 +27,7 @@ router.post('/n8n-webhook', asyncHandler(async (req, res) => {
   }
 
   try {
+    console.log('[N8N] Calling n8n webhook:', n8nWebhookUrl);
     const response = await fetch(n8nWebhookUrl, {
       method: 'POST',
       headers: {
@@ -35,8 +42,13 @@ router.post('/n8n-webhook', asyncHandler(async (req, res) => {
       })
     });
 
+    console.log('[N8N] Response status:', response.status);
+    console.log('[N8N] Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
-      throw new Error(`n8n webhook failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error('[N8N] n8n webhook failed:', response.status, errorText);
+      throw new Error(`n8n webhook failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -48,7 +60,8 @@ router.post('/n8n-webhook', asyncHandler(async (req, res) => {
     res.status(500).json({
       route: 'chat',
       message: 'Sorry, I encountered an error processing your request.',
-      error: 'n8n webhook failed'
+      error: 'n8n webhook failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }));
