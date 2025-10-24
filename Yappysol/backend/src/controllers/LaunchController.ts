@@ -32,12 +32,13 @@ export class LaunchController {
       });
 
       res.json({
-        status: 'READY_FOR_SIGNATURE',
-        confirm_text: `Launching ${draft.token_name} (${draft.token_symbol})`,
-        sign: {
+        status: 'COMPLETED',
+        confirm_text: `Token ${draft.token_name} (${draft.token_symbol}) launched successfully!`,
+        result: {
           provider: 'pump',
-          transaction: result.unsignedTransaction,
+          signature: result.signature,
           mintAddress: result.mint,
+          launchId: result.launchId,
           token_name: draft.token_name,
           token_symbol: draft.token_symbol,
           description: draft.description,
@@ -48,7 +49,7 @@ export class LaunchController {
           supply: draft.supply,
           decimals: draft.decimals
         },
-        message: `Token creation ready for signature: ${draft.token_name}`
+        message: `Token ${draft.token_name} created successfully!`
       });
 
     } catch (error) {

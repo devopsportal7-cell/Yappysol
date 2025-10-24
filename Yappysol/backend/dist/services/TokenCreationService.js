@@ -11,6 +11,7 @@ const node_fetch_1 = __importDefault(require("node-fetch"));
 // TEMPORARY: Importing Pinata IPFS upload from referencefile. Move to backend/src/lib/pinata.ts in production.
 const pinata_1 = require("../lib/pinata");
 const WalletService_1 = require("./WalletService");
+const WalletSupabase_1 = require("../models/WalletSupabase");
 const TokenLaunchSupabase_1 = require("../models/TokenLaunchSupabase");
 const TokenPriceTrackingService_1 = require("./TokenPriceTrackingService");
 // In-memory session store (replace with Redis in production)
@@ -880,19 +881,68 @@ class TokenCreationService {
                 uri: metadataUri
             }, params.pool === 'pump' ? mintAddress : bs58_1.default.encode(mintKeypair.secretKey), // For Bonk, pass the secret key as base58
             params.amount, params.pool);
-            // If this is a pump transaction, return unsigned transaction for user to sign
+            // If this is a pump transaction, sign it with user's private key
             if (result.unsignedTransaction) {
-                // Update launch record with transaction details
-                await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
-                    mintAddress: mintKeypair.publicKey.toBase58(),
-                    unsignedTransaction: result.unsignedTransaction,
-                    status: 'pending'
-                });
-                return {
-                    unsignedTransaction: result.unsignedTransaction,
-                    mint: mintKeypair.publicKey.toBase58(),
-                    launchId: launchRecord.id
-                };
+                try {
+                    console.log('[DEBUG] Signing Pump transaction with user\'s private key');
+                    // Get user's keypair from stored private key
+                    const userKeypair = await WalletSupabase_1.WalletModel.getKeypair(walletInfo.id);
+                    // Decode the unsigned transaction
+                    const transactionBytes = Uint8Array.from(atob(result.unsignedTransaction), c => c.charCodeAt(0));
+                    const transaction = web3_js_1.Transaction.from(transactionBytes);
+                    // Sign the transaction
+                    transaction.sign(userKeypair);
+                    // Send to network
+                    const connection = new web3_js_1.Connection('https://api.mainnet-beta.solana.com');
+                    const signature = await connection.sendRawTransaction(transaction.serialize());
+                    console.log('[DEBUG] Pump transaction signed and submitted:', signature);
+                    // Update launch record with success
+                    await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
+                        mintAddress: mintKeypair.publicKey.toBase58(),
+                        transactionSignature: signature,
+                        status: 'completed'
+                    });
+                    // Start price tracking for the new token
+                    setTimeout(async () => {
+                        try {
+                            await TokenPriceTrackingService_1.tokenPriceTrackingService.getTokenPrice(mintKeypair.publicKey.toBase58());
+                        }
+                        catch (error) {
+                            console.error('[TokenCreationService] Error starting price tracking:', error);
+                        }
+                    }, 5000); // Wait 5 seconds for token to be available
+                    const platform = 'pump.fun';
+                    const successMessage = `🎉 Token "${params.name}" (${params.symbol}) created successfully on ${platform}!\n\n` +
+                        `**Token Details:**\n` +
+                        `- Name: ${params.name}\n` +
+                        `- Symbol: ${params.symbol}\n` +
+                        `- Mint Address: ${mintKeypair.publicKey.toBase58()}\n` +
+                        `- Transaction: ${signature}\n` +
+                        `- Platform: ${platform}\n\n` +
+                        `[View Token on Solscan](https://solscan.io/token/${mintKeypair.publicKey.toBase58()})\n` +
+                        `[View Transaction](https://solscan.io/tx/${signature})\n\n` +
+                        `Your token is now live and trading! 🚀`;
+                    return {
+                        prompt: successMessage,
+                        signature: signature,
+                        mint: mintKeypair.publicKey.toBase58(),
+                        launchId: launchRecord.id,
+                        step: null // Flow completed
+                    };
+                }
+                catch (signingError) {
+                    console.error('[ERROR] Failed to sign Pump transaction:', signingError);
+                    // Update launch record with failure
+                    await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
+                        mintAddress: mintKeypair.publicKey.toBase58(),
+                        status: 'failed',
+                        errorMessage: signingError.message
+                    });
+                    return {
+                        prompt: `Failed to sign transaction: ${signingError.message}. Please try again.`,
+                        step: null
+                    };
+                }
             }
             // If this is a Bonk transaction, return success message directly
             if (result.signature) {

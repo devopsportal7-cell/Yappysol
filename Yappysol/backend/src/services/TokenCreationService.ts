@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 // TEMPORARY: Importing Pinata IPFS upload from referencefile. Move to backend/src/lib/pinata.ts in production.
 import { uploadImageToIPFS as pinataUploadImageToIPFS } from '../lib/pinata';
 import { WalletService } from './WalletService';
-import { WalletSupabase } from '../models/WalletSupabase';
+import { WalletModel } from '../models/WalletSupabase';
 import { TokenLaunchModel } from '../models/TokenLaunchSupabase';
 import { tokenPriceTrackingService } from './TokenPriceTrackingService';
 
@@ -936,7 +936,7 @@ export class TokenCreationService {
         console.log('[DEBUG] Signing Pump transaction with user\'s private key');
         
         // Get user's keypair from stored private key
-        const userKeypair = await WalletSupabase.getKeypair(walletInfo.id);
+        const userKeypair = await WalletModel.getKeypair(walletInfo.id);
         
         // Decode the unsigned transaction
         const transactionBytes = Uint8Array.from(atob(result.unsignedTransaction), c => c.charCodeAt(0));

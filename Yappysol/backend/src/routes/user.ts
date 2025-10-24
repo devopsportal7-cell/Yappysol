@@ -5,10 +5,31 @@ import { usernameCheckLimiter, profileUpdateLimiter } from '../middlewares/rateL
 import { asyncHandler } from '../utils/asyncHandler';
 import { authMiddleware } from '../middlewares/authMiddleware';
 
+// Optional auth middleware - doesn't fail if no auth token
+const optionalAuthMiddleware = (req: any, res: any, next: any) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  
+  // Try to verify token, but don't fail if invalid
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+    req.user = decoded;
+  } catch (error) {
+    req.user = null;
+  }
+  
+  next();
+};
+
 const router = express.Router();
 
-// Check username availability (public endpoint)
-router.get('/username/check', usernameCheckLimiter, asyncHandler(async (req, res) => {
+// Check username availability (supports optional auth for higher rate limits)
+router.get('/username/check', optionalAuthMiddleware, usernameCheckLimiter, asyncHandler(async (req, res) => {
   const { username } = req.query;
   
   if (!username || typeof username !== 'string') {

@@ -9,9 +9,10 @@ interface RateLimitEntry {
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 export const usernameCheckLimiter = (req: Request, res: Response, next: NextFunction) => {
-  const key = req.ip || 'unknown';
+  // Use user ID if authenticated, otherwise use IP
+  const key = (req as any).user?.id || req.ip || 'unknown';
   const windowMs = 60 * 1000; // 1 minute
-  const maxRequests = 30;
+  const maxRequests = (req as any).user?.id ? 100 : 30; // Higher limit for authenticated users
   
   const now = Date.now();
   const entry = rateLimitStore.get(key);
