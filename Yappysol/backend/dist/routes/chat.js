@@ -44,14 +44,42 @@ router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
         // Save user message to session if sessionId provided
         let currentSessionId = sessionId;
         if (currentSessionId) {
-            const userMessage = {
-                id: `msg-${Date.now()}-user`,
-                content: message,
-                role: 'user',
-                created_at: new Date().toISOString()
-            };
-            await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, userMessage);
-            console.log('[CHAT] Saved user message to session:', currentSessionId);
+            try {
+                const userMessage = {
+                    id: `msg-${Date.now()}-user`,
+                    content: message,
+                    role: 'user',
+                    created_at: new Date().toISOString()
+                };
+                await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, userMessage);
+                console.log('[CHAT] Saved user message to session:', currentSessionId);
+            }
+            catch (error) {
+                console.error('[CHAT] Failed to save user message to session:', error);
+                // Create a new session if the current one doesn't exist
+                try {
+                    const newSession = await ChatSessionSupabase_1.ChatSessionModel.createSession({
+                        userId,
+                        title: 'New Chat'
+                    });
+                    currentSessionId = newSession.id;
+                    console.log('[CHAT] Created new session:', currentSessionId);
+                    // Try to add the message again
+                    const userMessage = {
+                        id: `msg-${Date.now()}-user`,
+                        content: message,
+                        role: 'user',
+                        created_at: new Date().toISOString()
+                    };
+                    await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, userMessage);
+                    console.log('[CHAT] Saved user message to new session:', currentSessionId);
+                }
+                catch (createError) {
+                    console.error('[CHAT] Failed to create new session:', createError);
+                    // Continue without session tracking
+                    currentSessionId = null;
+                }
+            }
         }
         let response;
         // Check if we're in a step flow - this takes priority over intent detection
@@ -102,15 +130,21 @@ router.post('/message', authMiddleware_1.authMiddleware, (0, asyncHandler_1.asyn
         console.log('[CHAT] Service response:', response);
         // Save assistant response to session if sessionId provided
         if (currentSessionId) {
-            const assistantMessage = {
-                id: `msg-${Date.now()}-assistant`,
-                content: response.prompt || response.message || 'No response',
-                role: 'assistant',
-                action: response.action,
-                created_at: new Date().toISOString()
-            };
-            await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, assistantMessage);
-            console.log('[CHAT] Saved assistant message to session:', currentSessionId);
+            try {
+                const assistantMessage = {
+                    id: `msg-${Date.now()}-assistant`,
+                    content: response.prompt || response.message || 'No response',
+                    role: 'assistant',
+                    action: response.action,
+                    created_at: new Date().toISOString()
+                };
+                await ChatSessionSupabase_1.ChatSessionModel.addMessage(currentSessionId, assistantMessage);
+                console.log('[CHAT] Saved assistant message to session:', currentSessionId);
+            }
+            catch (error) {
+                console.error('[CHAT] Failed to save assistant message to session:', error);
+                // Continue without session tracking
+            }
         }
         // Return response in the format the frontend expects
         const finalResponse = {

@@ -22,10 +22,13 @@ const authMiddleware = async (req, res, next) => {
             // Standard JWT authentication
             user = await UserSupabase_1.UserModel.findById(payload.userId);
             if (user) {
-                // Update session last accessed time
+                // Update session last accessed time (optional - don't fail auth if this fails)
                 try {
                     const tokenHash = crypto_1.default.createHash('sha256').update(token).digest('hex');
-                    await UserSessionSupabase_1.UserSessionModel.updateLastAccessed((await UserSessionSupabase_1.UserSessionModel.findByInternalTokenHash(tokenHash))?.id || '');
+                    const session = await UserSessionSupabase_1.UserSessionModel.findByInternalTokenHash(tokenHash);
+                    if (session) {
+                        await UserSessionSupabase_1.UserSessionModel.updateLastAccessed(session.id);
+                    }
                 }
                 catch (error) {
                     console.error('Failed to update session access time:', error);
