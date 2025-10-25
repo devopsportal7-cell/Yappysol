@@ -1,5 +1,5 @@
 import { PrivyClient, User as PrivyUserType } from '@privy-io/server-auth';
-import { UserModel, User } from '../models/UserSupabase';
+import { UserModel, User, UserWithWallets } from '../models/UserSupabase';
 import { WalletModel } from '../models/WalletSupabase';
 import { ApiKeyModel } from '../models/ApiKeySupabase';
 import { UserSessionModel } from '../models/UserSessionSupabase';
@@ -8,7 +8,7 @@ import jwksClient from 'jwks-rsa';
 
 export interface PrivyAuthResult {
   success: boolean;
-  user?: User;
+  user?: UserWithWallets;
   token?: string;
   error?: string;
 }
@@ -118,10 +118,34 @@ export class PrivyAuthService {
         // Don't fail authentication if session creation fails
       }
 
+      // Get user wallets and portfolio data
+      let wallets: any[] = [];
+      let portfolio: any = null;
+      
+      try {
+        const { WalletService } = await import('./WalletService');
+        // Get user wallets with balances
+        wallets = await WalletService.getUserWallets(dbUser.id);
+        
+        // Get portfolio data for the first wallet (if available)
+        if (wallets.length > 0) {
+          const { UserPortfolioService } = await import('./UserPortfolioService');
+          const portfolioService = new UserPortfolioService();
+          portfolio = await portfolioService.getUserPortfolioWithMetadata(wallets[0].publicKey);
+        }
+      } catch (error) {
+        console.error('PrivyAuthService: Error fetching wallet/portfolio data:', error);
+        // Don't fail authentication if portfolio fetch fails
+      }
+
       console.log('PrivyAuthService: Authentication successful');
       return {
         success: true,
-        user: dbUser,
+        user: {
+          ...dbUser,
+          wallets,
+          portfolio
+        },
         token
       };
     } catch (error) {

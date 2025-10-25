@@ -17,7 +17,34 @@ const POPULAR_TOKENS = [
     { symbol: 'USDT', name: 'Tether', mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' },
     { symbol: 'USDC', name: 'USD Coin', mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
     { symbol: 'BONK', name: 'Bonk', mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263' },
-    // Add more as needed
+    { symbol: 'RAY', name: 'Raydium', mint: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R' },
+    { symbol: 'SRM', name: 'Serum', mint: 'SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt' },
+    { symbol: 'ORCA', name: 'Orca', mint: 'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE' },
+    { symbol: 'MNGO', name: 'Mango', mint: 'MangoCzJ36AjZyKwVj3VnYU4GTonjfVEnJmvvWaxLac' },
+    { symbol: 'STEP', name: 'Step Finance', mint: 'StepAscQoEioFxxWGnh2sLBDFp9d8rvKz2Yp39iDpyT' },
+    { symbol: 'COPE', name: 'Cope', mint: '8HGyAAB1yoM1ttS7pXjHMa3dukTFGQggnFFH3hJZgzQh' },
+    { symbol: 'ROPE', name: 'Rope', mint: '8PMHT4swUMtBzgHnh5U564N5sjPSiUz2cjEQzFnnP1Fo' },
+    { symbol: 'FIDA', name: 'Bonfida', mint: 'EchesyfXePKdLtoiZSL8pBe8Myagyy8ZRqsACNCFGnvp' },
+    { symbol: 'KIN', name: 'Kin', mint: 'kinXdEcpDQeHPEuQnqmUgtYykqKGVFq6CeVX5iAHJq6' },
+    { symbol: 'MAPS', name: 'Maps', mint: 'MAPS41MDahZ9QdKXhVa4dWB9RuyfV4XqhyAZ8XcYepb' },
+    { symbol: 'OXY', name: 'Oxygen', mint: 'z3dn17FLaLK39vv1HT8vcnHErzTxkv7RDdTzd1G69a1' },
+    { symbol: 'ATLAS', name: 'Star Atlas', mint: 'ATLASXmbPQxBUYbxPsV97usA3fPQYEqzQBUHgiFCUsXx' },
+    { symbol: 'POLIS', name: 'Star Atlas DAO', mint: 'poLisWXnNRwC6oBu1vHiuKQzFjZ4XdLDZx5jHNjNNs6' },
+    { symbol: 'SAMO', name: 'Samoyedcoin', mint: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU' },
+    { symbol: 'SLIM', name: 'Solanium', mint: 'xxxxa1sKNGwFtw2kFn8XauW9xq8jBcZxXFycLPM7' },
+    { symbol: 'LIKE', name: 'Only1', mint: '3bRTivrVsitbmCTGtqwp7hxXrsybztdB9Hd1J2LZefo' },
+    { symbol: 'MEDIA', name: 'Media Network', mint: 'ETAtLmCmsoiEEKfNrHKJ2kYy3MoABhU6NQvpSfij5tDs' },
+    { symbol: 'TULIP', name: 'Tulip Protocol', mint: 'TuLipcqtGVXP9XR62wM8WWCm6a9vhLs7T1uoWBk6FDs' },
+    { symbol: 'SLND', name: 'Solend', mint: 'SLNDpmoWTVADgEdndyvWzroNL7zSi1dF9PC3xHGtPwp' },
+    { symbol: 'PORT', name: 'Port Finance', mint: 'PoRTjZMPXb9T7dyU7tpLEZRQj7e6ssfAE62j2oQuc6y' },
+    { symbol: 'TULIP', name: 'Tulip Protocol', mint: 'TuLipcqtGVXP9XR62wM8WWCm6a9vhLs7T1uoWBk6FDs' },
+    { symbol: 'mSOL', name: 'Marinade Staked SOL', mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So' },
+    { symbol: 'stSOL', name: 'Lido Staked SOL', mint: '7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj' },
+    { symbol: 'scnSOL', name: 'Socean Staked SOL', mint: '5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm' },
+    { symbol: 'ETH', name: 'Ethereum (Wormhole)', mint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs' },
+    { symbol: 'BTC', name: 'Bitcoin (Wormhole)', mint: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E' },
+    { symbol: 'USDCet', name: 'USD Coin (Wormhole)', mint: 'A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM' },
+    { symbol: 'USDTet', name: 'Tether USD (Wormhole)', mint: 'Dn4noZ5jgGfk4zcZ3eY3gB1oU2A8Vq7N6SE1aG2mCz6z' }
 ];
 function getNextStep(currentStep) {
     if (!currentStep)
@@ -40,10 +67,18 @@ function validateSwapStepInput(step, input) {
         case 'toToken':
             if (!input || typeof input !== 'string' || input.length < 2)
                 return 'Please provide a valid token contract address or ticker.';
-            if (!isValidSolanaAddress(input) && !/^[A-Z0-9]{2,10}$/.test(input)) {
-                return 'Invalid token contract address format or ticker. Please provide a valid contract address.';
-            }
-            return null;
+            // Check if it's a valid Solana address
+            if (isValidSolanaAddress(input))
+                return null;
+            // Check if it's a valid token symbol (more flexible regex)
+            if (/^[A-Za-z0-9]{2,20}$/.test(input))
+                return null;
+            // Check if it's a known token name (like "solana")
+            const normalized = input.trim().toLowerCase();
+            const knownTokens = ['solana', 'sol', 'usdc', 'usdt', 'bonk', 'ethereum', 'bitcoin', 'btc', 'eth'];
+            if (knownTokens.includes(normalized))
+                return null;
+            return 'Invalid token contract address format or ticker. Please provide a valid contract address or token symbol (e.g., SOL, USDC, solana).';
         case 'amount':
             if (input === undefined || isNaN(Number(input)) || Number(input) <= 0)
                 return 'Amount must be a positive number.';
@@ -54,20 +89,146 @@ function validateSwapStepInput(step, input) {
 }
 function resolveTokenMint(input) {
     const normalized = input.trim().toLowerCase();
-    // Check by mint
+    // Check by mint (exact match)
     if (POPULAR_TOKENS.some(t => t.mint === input))
         return input;
-    // Check by symbol
+    // Check by symbol (case insensitive)
     const bySymbol = POPULAR_TOKENS.find(t => t.symbol.toLowerCase() === normalized);
     if (bySymbol)
         return bySymbol.mint;
-    // Check by name
+    // Check by name (case insensitive)
     const byName = POPULAR_TOKENS.find(t => t.name.toLowerCase() === normalized);
     if (byName)
         return byName.mint;
+    // Handle common aliases
+    const aliases = {
+        'solana': 'So11111111111111111111111111111111111111112',
+        'sol': 'So11111111111111111111111111111111111111112',
+        'usdc': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        'usdt': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+        'bonk': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+        'tether': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+        'usd coin': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    };
+    if (aliases[normalized])
+        return aliases[normalized];
     return null;
 }
 class TokenSwapService {
+    /**
+     * Determine the next missing step intelligently
+     */
+    getNextMissingStep(session) {
+        // Check what's missing in order of priority
+        if (!session.fromToken) {
+            return 'fromToken';
+        }
+        if (!session.toToken) {
+            return 'toToken';
+        }
+        if (!session.amount) {
+            return 'amount';
+        }
+        // All required steps are complete
+        return null;
+    }
+    /**
+     * Get appropriate prompt for the current step
+     */
+    getStepPrompt(step, session) {
+        switch (step) {
+            case 'fromToken':
+                return 'Which token do you want to swap from? (contract address or ticker)';
+            case 'toToken':
+                return `Which token do you want to swap to? (contract address or ticker)`;
+            case 'amount':
+                const fromSymbol = this.getTokenSymbol(session.fromToken);
+                const toSymbol = this.getTokenSymbol(session.toToken);
+                return `How much ${fromSymbol} do you want to swap for ${toSymbol}?`;
+            default:
+                return 'Please continue the swap process.';
+        }
+    }
+    /**
+     * Get token symbol from mint address
+     */
+    getTokenSymbol(mint) {
+        const token = POPULAR_TOKENS.find(t => t.mint === mint);
+        return token ? token.symbol : mint;
+    }
+    /**
+     * Generate swap confirmation summary
+     */
+    async generateSwapConfirmation(session, userId) {
+        // --- USD Value Calculation ---
+        const priceService = new TokenPriceService();
+        let fromUsd = null, toUsd = null, fromSymbol = '', toSymbol = '', toAmount = null;
+        const EXCHANGE_FEE_RATE = 0.0192; // 1.92%
+        try {
+            if (session.fromToken && session.amount) {
+                const fromPrice = await priceService.getTokenPriceWithMetadata(session.fromToken);
+                fromUsd = fromPrice.usdPrice * session.amount;
+                fromSymbol = fromPrice.symbol || session.fromToken;
+                // Calculate fee
+                const feeUsd = fromUsd * EXCHANGE_FEE_RATE;
+                const fromUsdAfterFee = fromUsd - feeUsd;
+                if (session.toToken) {
+                    const toPrice = await priceService.getTokenPriceWithMetadata(session.toToken);
+                    toSymbol = toPrice.symbol || session.toToken;
+                    // Calculate how much toToken the user will get for the USD value of fromToken after fee
+                    if (toPrice.usdPrice > 0) {
+                        toAmount = fromUsdAfterFee / toPrice.usdPrice;
+                        toUsd = toAmount * toPrice.usdPrice; // Should be ≈ fromUsdAfterFee
+                    }
+                    else {
+                        toAmount = null;
+                        toUsd = 0;
+                    }
+                }
+            }
+        }
+        catch (e) { /* ignore price errors */ }
+        const fromUsdDisplay = fromUsd !== null ? ` ($${fromUsd < 0.01 ? fromUsd.toFixed(8) : fromUsd.toFixed(4)} USD)` : '';
+        const toUsdDisplay = toUsd !== null ? ` ($${toUsd < 0.01 ? toUsd.toFixed(8) : toUsd.toFixed(4)} USD)` : '';
+        const toAmountDisplay = toAmount !== null ? `${toAmount < 0.01 ? toAmount.toFixed(8) : toAmount.toLocaleString(undefined, { maximumFractionDigits: 8 })}` : '-';
+        // Get wallet and fee information
+        let walletInfo = null;
+        let fees = null;
+        try {
+            walletInfo = await WalletService_1.WalletService.getUserDefaultWallet(userId);
+            if (walletInfo) {
+                fees = WalletService_1.WalletService.calculateTransactionFees('token-swap', session.amount);
+            }
+        }
+        catch (error) {
+            console.error('Error getting wallet info for swap confirmation:', error);
+        }
+        let summary = `🔄 **Swap Summary**\n` +
+            `-----------------------------\n` +
+            `**From:** ${session.amount || '-'} ${fromSymbol}${fromUsdDisplay}\n` +
+            `**To:** ${toAmountDisplay} ${toSymbol}${toUsdDisplay}\n` +
+            `-----------------------------\n`;
+        // Add wallet and fee information if available
+        if (walletInfo && fees) {
+            summary += `\n💰 **Transaction Details:**\n` +
+                `Wallet: ${walletInfo.publicKey.slice(0, 8)}...${walletInfo.publicKey.slice(-8)}\n` +
+                `Balance: ${walletInfo.balance.toFixed(6)} SOL\n` +
+                `Network Fee: ${fees.networkFee.toFixed(6)} SOL\n` +
+                `Priority Fee: ${fees.priorityFee.toFixed(6)} SOL\n` +
+                `Total Cost: ${fees.estimatedCost.toFixed(6)} SOL\n`;
+        }
+        summary += `\nType 'proceed' to perform the swap or 'cancel' to abort.`;
+        return {
+            prompt: summary,
+            step: 'confirmation',
+            requireSignature: false,
+            swapDetails: {
+                fromToken: session.fromToken,
+                toToken: session.toToken,
+                amount: session.amount
+            }
+        };
+    }
     // Multi-step chat flow for token swap
     async handleSwapIntent(message, context) {
         const userId = context.userId || context.walletAddress || 'default';
@@ -82,6 +243,48 @@ class TokenSwapService {
             delete exports.swapSessions[userId];
         }
         let session = exports.swapSessions[userId] || { step: null };
+        // SMART ENTITY HANDLING: Check if entities are provided in context
+        const hasPreExtractedEntities = context.fromToken || context.toToken || context.amount;
+        if (hasPreExtractedEntities) {
+            console.log('[TokenSwapService] Pre-extracted entities found:', {
+                fromToken: context.fromToken,
+                toToken: context.toToken,
+                amount: context.amount
+            });
+            // Populate session with pre-extracted entities
+            if (context.fromToken) {
+                const resolvedFromToken = resolveTokenMint(context.fromToken);
+                session.fromToken = resolvedFromToken || context.fromToken;
+                console.log('[TokenSwapService] Set fromToken:', session.fromToken);
+            }
+            if (context.toToken) {
+                const resolvedToToken = resolveTokenMint(context.toToken);
+                session.toToken = resolvedToToken || context.toToken;
+                console.log('[TokenSwapService] Set toToken:', session.toToken);
+            }
+            if (context.amount) {
+                session.amount = Number(context.amount);
+                console.log('[TokenSwapService] Set amount:', session.amount);
+            }
+            // Determine the next missing step intelligently
+            const nextMissingStep = this.getNextMissingStep(session);
+            console.log('[TokenSwapService] Next missing step:', nextMissingStep);
+            if (nextMissingStep) {
+                session.step = nextMissingStep;
+                exports.swapSessions[userId] = session;
+                // Return prompt for the missing step
+                const prompt = this.getStepPrompt(nextMissingStep, session);
+                return { prompt, step: nextMissingStep };
+            }
+            else {
+                // All required information is available, go to confirmation
+                session.step = 'confirmation';
+                session.awaitingConfirmation = true;
+                exports.swapSessions[userId] = session;
+                // Generate confirmation summary
+                return this.generateSwapConfirmation(session, userId);
+            }
+        }
         // Use currentStep from context if available, otherwise use session step
         let step = context.currentStep || session.step;
         // Update session with current step

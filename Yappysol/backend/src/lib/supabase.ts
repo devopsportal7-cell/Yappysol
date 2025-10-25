@@ -28,5 +28,11 @@ export const TABLES = {
   PASSWORD_RESET_TOKENS: 'password_reset_tokens',
   TOKEN_LAUNCHES: 'token_launches',
   TOKEN_PRICES: 'token_prices',
-  USER_TOKEN_HOLDINGS: 'user_token_holdings'
+  USER_TOKEN_HOLDINGS: 'user_token_holdings',
+  // External wallet deposit system tables
+  EXTERNAL_TRANSACTIONS: 'external_transactions',
+  WALLET_BALANCE_CACHE: 'wallet_balance_cache',
+  TOKEN_BALANCE_CACHE: 'token_balance_cache',
+  BALANCE_UPDATE_EVENTS: 'balance_update_events',
+  PLATFORM_WALLETS: 'platform_wallets'
 } as const;

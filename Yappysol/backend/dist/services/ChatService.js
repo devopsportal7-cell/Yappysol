@@ -665,8 +665,20 @@ Be enthusiastic about the Solana ecosystem!`;
             if (isSwap) {
                 console.log('[chatWithOpenAI] Routing to: swap service');
                 console.log('[chatWithOpenAI] Swap context:', JSON.stringify(context, null, 2));
+                // Extract entities for fallback swap handling
+                let fallbackEntities = {};
                 try {
-                    const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
+                    fallbackEntities = await this.entityExtractor.extractEntities(message, 'swap');
+                    console.log('[chatWithOpenAI] Fallback extracted entities:', fallbackEntities);
+                }
+                catch (error) {
+                    console.error('[chatWithOpenAI] Error extracting entities for fallback swap:', error);
+                }
+                // Enhance context with extracted entities
+                const enhancedContext = { ...context, ...fallbackEntities };
+                console.log('[chatWithOpenAI] Enhanced swap context:', JSON.stringify(enhancedContext, null, 2));
+                try {
+                    const swapResult = await this.tokenSwapService.handleSwapIntent(message, enhancedContext);
                     console.log('[chatWithOpenAI] Swap result:', JSON.stringify(swapResult, null, 2));
                     return {
                         prompt: swapResult.prompt,

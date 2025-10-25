@@ -1,925 +1,493 @@
-# Yappysol Frontend Implementation Guide for Lovable
+# 🎯 Frontend Implementation Guide for Lovable
 
-## Overview
-This document provides specific implementation guidance for the Yappysol frontend built on Lovable. It focuses on frontend-specific functionality and integration patterns without duplicating backend logic.
+## 📋 **Overview**
 
-## Critical Implementation Gaps
+This guide covers the frontend changes needed for:
+1. **External Wallet Deposit Balance System** - Real-time balance updates
+2. **Smart Chat Modifications** - Enhanced intent detection and entity extraction
 
-### 1. Multi-Step Flow Tracking (HIGH PRIORITY)
+## 🚀 **1. External Wallet Deposit Balance System**
 
-**Current Issue**: Frontend only tracks `currentStep` but doesn't know which flow type is active.
+### **Required Frontend Changes**
 
-**Problem**: 
-- Token Launch has 10 steps: `name → symbol → description → image → twitter → telegram → website → pool → amount → confirmation`
-- Token Swap has 4 steps: `fromToken → toToken → amount → confirmation`
-- Without flow type, frontend can't show correct placeholders, validation, or UI
-
-**Implementation**:
+#### **A. Real-time Balance Hook**
+Create a new hook for real-time balance updates:
 
 ```typescript
-// Add flow type tracking
-const [currentFlow, setCurrentFlow] = useState<'launch' | 'swap' | null>(null);
-const [currentStep, setCurrentStep] = useState<string | null>(null);
+// hooks/useWalletBalance.ts
+import { useState, useEffect } from 'react';
 
-// Detect flow type from backend response
-const detectFlowType = (step: string): 'launch' | 'swap' | null => {
-  const launchSteps = ['name', 'symbol', 'description', 'image', 'twitter', 'telegram', 'website', 'pool', 'amount', 'confirmation'];
-  const swapSteps = ['fromToken', 'toToken', 'amount', 'confirmation'];
+export function useWalletBalance(walletAddress: string) {
+  const [balance, setBalance] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  if (launchSteps.includes(step)) return 'launch';
-  if (swapSteps.includes(step)) return 'swap';
-  return null;
-};
-
-// Update when receiving backend response
-const handleBackendResponse = (response: any) => {
-  if (response.step) {
-    const flowType = detectFlowType(response.step);
-    setCurrentFlow(flowType);
-    setCurrentStep(response.step);
-  }
-};
-```
-
-**Benefits**:
-- Show correct placeholder text per flow
-- Display appropriate progress indicators
-- Know when to show image upload UI (launch flow only)
-- Validate inputs correctly per flow context
-
----
-
-### 2. Transaction Handling (CRITICAL PRIORITY)
-
-**Current Issue**: Backend returns transaction objects but frontend doesn't handle them.
-
-**Problem**: Users can't complete token launches or swaps because transactions aren't processed.
-
-**Implementation**:
-
-```typescript
-// Transaction handling component
-interface TransactionPromptProps {
-  transaction: string; // Base64 encoded unsigned transaction
-  mint?: string; // For token launches
-  signature?: string; // For completed transactions
-  onSign: (transaction: string) => Promise<void>;
-  onComplete: () => void;
-}
-
-const TransactionPrompt: React.FC<TransactionPromptProps> = ({
-  transaction,
-  mint,
-  signature,
-  onSign,
-  onComplete
-}) => {
-  const [isSigning, setIsSigning] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(!!signature);
-
-  const handleSign = async () => {
-    setIsSigning(true);
-    try {
-      await onSign(transaction);
-      setIsCompleted(true);
-    } catch (error) {
-      console.error('Transaction signing failed:', error);
-      // Show error to user
-    } finally {
-      setIsSigning(false);
-    }
-  };
-
-  return (
-    <div className="transaction-prompt">
-      <h3>Transaction Required</h3>
-      
-      {mint && (
-        <div className="token-info">
-          <p><strong>Token Address:</strong> <code>{mint}</code></p>
-          <a 
-            href={`https://solscan.io/token/${mint}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View on Solscan
-          </a>
-        </div>
-      )}
-
-      {signature && (
-        <div className="transaction-complete">
-          <p>✅ Transaction completed!</p>
-          <p><strong>Signature:</strong> <code>{signature}</code></p>
-          <a 
-            href={`https://solscan.io/tx/${signature}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View Transaction
-          </a>
-        </div>
-      )}
-
-      {!isCompleted && (
-        <button 
-          onClick={handleSign}
-          disabled={isSigning}
-          className="sign-transaction-btn"
-        >
-          {isSigning ? 'Signing...' : 'Sign Transaction'}
-        </button>
-      )}
-
-      {isCompleted && (
-        <button onClick={onComplete} className="continue-btn">
-          Continue
-        </button>
-      )}
-    </div>
-  );
-};
-
-// Integration with wallet (Phantom/Backpack)
-const useWallet = () => {
-  const [wallet, setWallet] = useState<any>(null);
-
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.solana) {
-      setWallet(window.solana);
-    }
-  }, []);
-
-  const signTransaction = async (unsignedTransaction: string) => {
-    if (!wallet) throw new Error('Wallet not connected');
+    // Initial fetch
+    fetchBalance();
     
-    // Decode base64 transaction
-    const transactionBytes = Uint8Array.from(atob(unsignedTransaction), c => c.charCodeAt(0));
-    const transaction = Transaction.from(transactionBytes);
-    
-    // Sign with wallet
-    const signedTransaction = await wallet.signTransaction(transaction);
-    
-    // Send to network
-    const connection = new Connection('https://api.mainnet-beta.solana.com');
-    const signature = await connection.sendRawTransaction(signedTransaction.serialize());
-    
-    return signature;
-  };
-
-  return { signTransaction, isConnected: !!wallet };
-};
-
-// Usage in main chat component
-const handleBackendResponse = async (response: any) => {
-  // Handle regular responses
-  if (response.prompt) {
-    setMessages(prev => [...prev, { role: 'assistant', content: response.prompt }]);
-  }
-
-  // Handle transactions
-  if (response.unsignedTransaction) {
-    setShowTransaction(true);
-    setPendingTransaction({
-      transaction: response.unsignedTransaction,
-      mint: response.mint,
-      action: response.action
+    // SSE connection for real-time updates
+    const eventSource = new EventSource(`/api/wallet/${walletAddress}/events`, {
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`
+      }
     });
-  }
-
-  // Handle completed transactions
-  if (response.signature) {
-    setMessages(prev => [...prev, { 
-      role: 'assistant', 
-      content: `Transaction completed! Signature: ${response.signature}` 
-    }]);
-  }
-};
-```
-
-**Required Dependencies**:
-```json
-{
-  "@solana/web3.js": "^1.87.6",
-  "@solana/wallet-adapter-base": "^0.9.23",
-  "@solana/wallet-adapter-react": "^0.15.35",
-  "@solana/wallet-adapter-react-ui": "^0.9.35"
+    
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.reason === 'external_tx' || data.reason === 'cache_update') {
+        // Refresh balance when external transaction detected
+        fetchBalance();
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+    };
+    
+    return () => {
+      eventSource.close();
+    };
+  }, [walletAddress]);
+  
+  const fetchBalance = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/wallet/${walletAddress}/balance`, {
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`
+        }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setBalance(data.data);
+        setError(null);
+      } else {
+        setError(data.error);
+      }
+    } catch (err) {
+      setError('Failed to fetch balance');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return { balance, loading, error, refetch: fetchBalance };
 }
 ```
 
----
-
-### 3. Image Upload Implementation (MEDIUM PRIORITY)
-
-**Current Issue**: Images sent as base64 in message context instead of using dedicated endpoint.
-
-**Implementation**:
+#### **B. Wallet Balance Component**
+Create a component to display real-time balance:
 
 ```typescript
-// Image upload component for token launch
-const ImageUploadStep: React.FC<{
-  onUploadComplete: (response: any) => void;
-  onError: (error: string) => void;
-}> = ({ onUploadComplete, onError }) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+// components/WalletBalance.tsx
+import React from 'react';
+import { useWalletBalance } from '../hooks/useWalletBalance';
 
-  const handleFileUpload = async (file: File) => {
-    // Validate file
-    if (!file.type.startsWith('image/')) {
-      onError('Please upload an image file (PNG, JPG, GIF, etc.)');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      onError('File size must be less than 10MB');
-      return;
-    }
-
-    setIsUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('userId', getCurrentUserId()); // Get from auth context
-
-      const response = await fetch('/api/chat/token-creation', {
-        method: 'POST',
-        body: formData,
-        // Don't set Content-Type header - let browser handle multipart/form-data
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
-      }
-
-      const result = await response.json();
-      onUploadComplete(result);
-
-    } catch (error) {
-      onError(error instanceof Error ? error.message : 'Upload failed');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileUpload(file);
-  };
-
+export const WalletBalance: React.FC<{ walletAddress: string }> = ({ walletAddress }) => {
+  const { balance, loading, error, refetch } = useWalletBalance(walletAddress);
+  
+  if (loading) return <div>Loading balance...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!balance) return <div>No balance data</div>;
+  
   return (
-    <div className="image-upload-container">
-      <div
-        className={`upload-area ${dragActive ? 'drag-active' : ''} ${isUploading ? 'uploading' : ''}`}
-        onDrop={handleDrop}
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragLeave={() => setDragActive(false)}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        {isUploading ? (
-          <div className="uploading-state">
-            <div className="spinner"></div>
-            <p>Uploading image...</p>
-          </div>
-        ) : (
-          <div className="upload-prompt">
-            <div className="upload-icon">📁</div>
-            <p>Drop your token image here or click to browse</p>
-            <p className="upload-hint">PNG, JPG, GIF up to 10MB</p>
-          </div>
-        )}
+    <div className="wallet-balance">
+      <h3>Wallet Balance</h3>
+      <div className="totals">
+        <div>SOL: {balance.totalSolValue.toFixed(4)}</div>
+        <div>USD: ${balance.totalUsdValue.toFixed(2)}</div>
       </div>
       
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFileUpload(file);
-        }}
-        style={{ display: 'none' }}
-      />
-    </div>
-  );
-};
-
-// Integration with main chat flow
-const renderStepInput = () => {
-  if (currentStep === 'image' && currentFlow === 'launch') {
-    return (
-      <ImageUploadStep
-        onUploadComplete={(response) => {
-          setCurrentStep(response.step);
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: response.prompt 
-          }]);
-        }}
-        onError={(error) => {
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: `Upload error: ${error}. Please try again.` 
-          }]);
-        }}
-      />
-    );
-  }
-
-  // Regular text input for other steps
-  return <TextInput onSend={handleSendMessage} />;
-};
-```
-
----
-
-### 4. Flow Cancellation (MEDIUM PRIORITY)
-
-**Current Issue**: No way to cancel multi-step flows mid-way.
-
-**Implementation**:
-
-```typescript
-const cancelFlow = async () => {
-  try {
-    // Notify backend to cancel
-    await sendChatMessage({
-      message: 'cancel',
-      context: { currentStep }
-    });
-
-    // Reset frontend state
-    setCurrentFlow(null);
-    setCurrentStep(null);
-    setMessages([]);
-    setShowTransaction(false);
-    setPendingTransaction(null);
-
-  } catch (error) {
-    console.error('Error cancelling flow:', error);
-    // Still reset frontend state even if backend fails
-    setCurrentFlow(null);
-    setCurrentStep(null);
-    setMessages([]);
-  }
-};
-
-// UI with cancel button
-const FlowHeader = () => {
-  if (!currentFlow) return null;
-
-  return (
-    <div className="flow-header">
-      <h3>
-        {currentFlow === 'launch' ? '🚀 Token Launch' : '🔄 Token Swap'}
-        {currentStep && ` - Step: ${currentStep}`}
-      </h3>
-      <button 
-        onClick={cancelFlow}
-        className="cancel-button"
-        title="Cancel current flow"
-      >
-        ✕ Cancel
-      </button>
+      <div className="tokens">
+        <h4>Tokens</h4>
+        {balance.tokens.map(token => (
+          <div key={token.mint} className="token">
+            <span>{token.symbol}: {token.uiAmount.toFixed(4)}</span>
+            <span>${token.usdEquivalent.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+      
+      <button onClick={refetch}>Refresh Balance</button>
     </div>
   );
 };
 ```
 
----
-
-### 5. Step-Specific Validation (MEDIUM PRIORITY)
-
-**Current Issue**: All inputs treated the same, no validation before sending to backend.
-
-**Implementation**:
+#### **C. Transaction History Component**
+Create a component for transaction history:
 
 ```typescript
-const validateStepInput = (input: string, step: string, flow: string): { isValid: boolean; error?: string } => {
-  switch (step) {
-    case 'symbol':
-      if (!/^[A-Z]{3,10}$/.test(input)) {
-        return { 
-          isValid: false, 
-          error: 'Token symbol must be 3-10 uppercase letters (e.g., BONK)' 
-        };
+// components/TransactionHistory.tsx
+import React, { useState, useEffect } from 'react';
+
+export const TransactionHistory: React.FC<{ walletAddress: string }> = ({ walletAddress }) => {
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchTransactions();
+  }, [walletAddress]);
+  
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/wallet/${walletAddress}/history`, {
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`
+        }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setTransactions(data.data);
       }
-      break;
-
-    case 'amount':
-      const num = parseFloat(input);
-      if (isNaN(num) || num <= 0) {
-        return { 
-          isValid: false, 
-          error: 'Amount must be a positive number (e.g., 0.5)' 
-        };
-      }
-      break;
-
-    case 'twitter':
-    case 'telegram':
-    case 'website':
-      if (input.toLowerCase() !== 'skip' && !isValidUrl(input)) {
-        return { 
-          isValid: false, 
-          error: 'Please enter a valid URL or type "skip"' 
-        };
-      }
-      break;
-
-    case 'pool':
-      if (!['pump', 'bonk'].includes(input.toLowerCase())) {
-        return { 
-          isValid: false, 
-          error: 'Please type "pump" or "bonk"' 
-        };
-      }
-      break;
-
-    case 'fromToken':
-    case 'toToken':
-      if (!isValidTokenInput(input)) {
-        return { 
-          isValid: false, 
-          error: 'Please enter a valid token symbol (e.g., SOL, USDC) or contract address' 
-        };
-      }
-      break;
-
-    default:
-      break;
-  }
-
-  return { isValid: true };
-};
-
-const isValidUrl = (url: string): boolean => {
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const isValidTokenInput = (input: string): boolean => {
-  // Check if it's a valid Solana address (44 chars) or common token symbol
-  const commonTokens = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH'];
-  return commonTokens.includes(input.toUpperCase()) || 
-         /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(input);
-};
-
-const getStepPlaceholder = (step: string, flow: string): string => {
-  const placeholders: Record<string, string> = {
-    // Token Launch
-    name: 'Enter token name (e.g., "My Awesome Token")',
-    symbol: 'Enter token symbol (e.g., "MAT")',
-    description: 'Describe your token',
-    twitter: 'Enter Twitter URL or type "skip"',
-    telegram: 'Enter Telegram URL or type "skip"',
-    website: 'Enter website URL or type "skip"',
-    pool: 'Choose pool type (pump/bonk)',
-    amount: 'Enter launch amount in SOL',
-    confirmation: 'Type "proceed" to launch or "cancel" to abort',
-    
-    // Token Swap
-    fromToken: 'Enter source token (e.g., "SOL", "USDC", or contract address)',
-    toToken: 'Enter destination token (e.g., "SOL", "USDC", or contract address)',
-    amount: 'Enter amount to swap'
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    } finally {
+      setLoading(false);
+    }
   };
   
-  return placeholders[step] || 'Enter your response...';
-};
-
-// Enhanced text input with validation
-const TextInput: React.FC<{
-  onSend: (message: string) => void;
-  isLoading: boolean;
-}> = ({ onSend, isLoading }) => {
-  const [message, setMessage] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!message.trim() || isLoading) return;
-
-    // Validate input
-    const validation = validateStepInput(message.trim(), currentStep || '', currentFlow || '');
-    
-    if (!validation.isValid) {
-      setValidationError(validation.error || 'Invalid input');
-      return;
-    }
-
-    setValidationError(null);
-    onSend(message.trim());
-    setMessage('');
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="text-input-form">
-      {validationError && (
-        <div className="validation-error">
-          {validationError}
+    <div className="transaction-history">
+      <h3>Transaction History</h3>
+      {loading ? (
+        <div>Loading transactions...</div>
+      ) : (
+        <div className="transactions">
+          {transactions.map((tx, index) => (
+            <div key={index} className="transaction">
+              <div className="tx-info">
+                <span className="type">{tx.type}</span>
+                <span className="amount">{tx.amount} {tx.tokenSymbol}</span>
+                <span className="time">{new Date(tx.created_at || tx.block_time * 1000).toLocaleString()}</span>
+              </div>
+              {tx.solscan_url && (
+                <a href={tx.solscan_url} target="_blank" rel="noopener noreferrer">
+                  View on Solscan
+                </a>
+              )}
+            </div>
+          ))}
         </div>
       )}
-      
-      <div className="input-container">
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => {
-            setMessage(e.target.value);
-            setValidationError(null); // Clear error on typing
-          }}
-          placeholder={getStepPlaceholder(currentStep || '', currentFlow || '')}
-          disabled={isLoading}
-          className="text-input"
-        />
-        <button 
-          type="submit"
-          disabled={isLoading || !message.trim()}
-          className="send-button"
-        >
-          {isLoading ? '⏳' : '➤'}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 };
 ```
 
----
+### **Integration Points**
 
-## Complete Integration Example
+#### **A. Portfolio Page Integration**
+Update the portfolio page to use real-time balance:
 
 ```typescript
-// Main chat component integration
-const ChatComponent: React.FC = () => {
-  const [currentFlow, setCurrentFlow] = useState<'launch' | 'swap' | null>(null);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Array<{role: string, content: string}>>([]);
-  const [showTransaction, setShowTransaction] = useState(false);
-  const [pendingTransaction, setPendingTransaction] = useState<any>(null);
-  const { signTransaction } = useWallet();
+// pages/Portfolio.tsx (modify existing)
+import { useWalletBalance } from '../hooks/useWalletBalance';
+import { TransactionHistory } from '../components/TransactionHistory';
 
-  const detectFlowType = (step: string): 'launch' | 'swap' | null => {
-    const launchSteps = ['name', 'symbol', 'description', 'image', 'twitter', 'telegram', 'website', 'pool', 'amount', 'confirmation'];
-    const swapSteps = ['fromToken', 'toToken', 'amount', 'confirmation'];
-    
-    if (launchSteps.includes(step)) return 'launch';
-    if (swapSteps.includes(step)) return 'swap';
-    return null;
-  };
-
-  const handleBackendResponse = async (response: any) => {
-    // Update flow and step tracking
-    if (response.step) {
-      const flowType = detectFlowType(response.step);
-      setCurrentFlow(flowType);
-      setCurrentStep(response.step);
-    }
-
-    // Handle regular responses
-    if (response.prompt) {
-      setMessages(prev => [...prev, { role: 'assistant', content: response.prompt }]);
-    }
-
-    // Handle transactions
-    if (response.unsignedTransaction) {
-      setShowTransaction(true);
-      setPendingTransaction({
-        transaction: response.unsignedTransaction,
-        mint: response.mint,
-        action: response.action
-      });
-    }
-
-    // Handle completed transactions
-    if (response.signature) {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Transaction completed! Signature: ${response.signature}` 
-      }]);
-    }
-  };
-
-  const handleSignTransaction = async (transaction: string) => {
-    try {
-      const signature = await signTransaction(transaction);
-      
-      // Send signature back to backend
-      await sendChatMessage({
-        message: `Transaction signed: ${signature}`,
-        context: { currentStep, transactionSignature: signature }
-      });
-
-      setShowTransaction(false);
-      setPendingTransaction(null);
-    } catch (error) {
-      console.error('Transaction signing failed:', error);
-      // Show error to user
-    }
-  };
-
-  const cancelFlow = async () => {
-    try {
-      await sendChatMessage({
-        message: 'cancel',
-        context: { currentStep }
-      });
-    } catch (error) {
-      console.error('Error cancelling flow:', error);
-    } finally {
-      // Always reset frontend state
-      setCurrentFlow(null);
-      setCurrentStep(null);
-      setMessages([]);
-      setShowTransaction(false);
-      setPendingTransaction(null);
-    }
-  };
-
+export const Portfolio: React.FC = () => {
+  const userWallet = getUserWallet(); // Your existing wallet logic
+  const { balance, loading, error } = useWalletBalance(userWallet.address);
+  
   return (
-    <div className="chat-container">
-      <FlowHeader />
+    <div className="portfolio">
+      <WalletBalance walletAddress={userWallet.address} />
+      <TransactionHistory walletAddress={userWallet.address} />
+    </div>
+  );
+};
+```
+
+#### **B. Dashboard Integration**
+Update dashboard to show real-time balance:
+
+```typescript
+// components/DashboardLayout.tsx (modify existing)
+import { useWalletBalance } from '../hooks/useWalletBalance';
+
+export const DashboardLayout: React.FC = ({ children }) => {
+  const userWallet = getUserWallet();
+  const { balance } = useWalletBalance(userWallet.address);
+  
+  return (
+    <div className="dashboard">
+      <div className="balance-summary">
+        <div>Total SOL: {balance?.totalSolValue.toFixed(4) || '0.0000'}</div>
+        <div>Total USD: ${balance?.totalUsdValue.toFixed(2) || '0.00'}</div>
+      </div>
+      {children}
+    </div>
+  );
+};
+```
+
+## 🧠 **2. Smart Chat Modifications**
+
+### **Required Frontend Changes**
+
+#### **A. Enhanced Chat Response Handling**
+Update the chat component to handle smart multi-step flows:
+
+```typescript
+// components/Chat.tsx (modify existing)
+export const Chat: React.FC = () => {
+  const [messages, setMessages] = useState([]);
+  const [currentStep, setCurrentStep] = useState(null);
+  const [currentFlow, setCurrentFlow] = useState(null);
+  
+  const handleSendMessage = async (message: string) => {
+    try {
+      const response = await fetch('/api/chat/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
+        body: JSON.stringify({
+          message,
+          context: {
+            currentStep,
+            currentFlow
+          }
+        })
+      });
       
-      <div className="messages-container">
+      const data = await response.json();
+      
+      // Handle smart multi-step flows
+      if (data.step) {
+        setCurrentStep(data.step);
+        setCurrentFlow(data.action);
+      } else {
+        setCurrentStep(null);
+        setCurrentFlow(null);
+      }
+      
+      // Handle different response types
+      if (data.action === 'swap' && data.unsignedTransaction) {
+        // Handle swap transaction
+        handleSwapTransaction(data);
+      } else if (data.action === 'create-token' && data.unsignedTransaction) {
+        // Handle token creation transaction
+        handleTokenCreation(data);
+      } else {
+        // Regular chat response
+        addMessage(data.prompt, 'assistant');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
+  
+  const handleSwapTransaction = (data: any) => {
+    // Show swap confirmation UI
+    addMessage(data.prompt, 'assistant');
+    // Add transaction signing UI
+    showTransactionSigning(data.unsignedTransaction, data.swapDetails);
+  };
+  
+  const handleTokenCreation = (data: any) => {
+    // Show token creation confirmation UI
+    addMessage(data.prompt, 'assistant');
+    // Add transaction signing UI
+    showTransactionSigning(data.unsignedTransaction, data.tokenDetails);
+  };
+  
+  return (
+    <div className="chat">
+      <div className="messages">
         {messages.map((msg, index) => (
           <div key={index} className={`message ${msg.role}`}>
             {msg.content}
           </div>
         ))}
       </div>
-
-      <div className="input-container">
-        {currentStep === 'image' && currentFlow === 'launch' ? (
-          <ImageUploadStep
-            onUploadComplete={handleBackendResponse}
-            onError={(error) => {
-              setMessages(prev => [...prev, { 
-                role: 'assistant', 
-                content: `Upload error: ${error}. Please try again.` 
-              }]);
-            }}
-          />
-        ) : (
-          <TextInput 
-            onSend={async (message) => {
-              const response = await sendChatMessage({
-                message,
-                context: { currentStep, currentFlow }
-              });
-              handleBackendResponse(response);
-            }}
-            isLoading={false}
-          />
+      
+      <div className="input-area">
+        {currentStep && (
+          <div className="current-step">
+            <span>Step: {currentStep}</span>
+            <button onClick={() => setCurrentStep(null)}>Cancel</button>
+          </div>
         )}
-      </div>
-
-      {showTransaction && pendingTransaction && (
-        <TransactionPrompt
-          transaction={pendingTransaction.transaction}
-          mint={pendingTransaction.mint}
-          onSign={handleSignTransaction}
-          onComplete={() => {
-            setShowTransaction(false);
-            setPendingTransaction(null);
+        
+        <input
+          type="text"
+          placeholder={getInputPlaceholder(currentStep)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              handleSendMessage(e.target.value);
+              e.target.value = '';
+            }
           }}
         />
-      )}
+      </div>
+    </div>
+  );
+};
+
+const getInputPlaceholder = (step: string | null): string => {
+  switch (step) {
+    case 'fromToken': return 'Enter source token (e.g., "SOL", "USDC")';
+    case 'toToken': return 'Enter destination token (e.g., "USDC", "BONK")';
+    case 'amount': return 'Enter amount to swap';
+    case 'confirmation': return 'Type "proceed" to confirm or "cancel" to abort';
+    default: return 'Enter your message...';
+  }
+};
+```
+
+#### **B. Transaction Signing Component**
+Create a component for transaction signing:
+
+```typescript
+// components/TransactionSigning.tsx
+import React, { useState } from 'react';
+
+export const TransactionSigning: React.FC<{
+  unsignedTransaction: string;
+  details: any;
+  onSign: (signedTx: string) => void;
+  onCancel: () => void;
+}> = ({ unsignedTransaction, details, onSign, onCancel }) => {
+  const [signing, setSigning] = useState(false);
+  
+  const handleSign = async () => {
+    try {
+      setSigning(true);
+      // Your existing transaction signing logic
+      const signedTx = await signTransaction(unsignedTransaction);
+      onSign(signedTx);
+    } catch (error) {
+      console.error('Error signing transaction:', error);
+    } finally {
+      setSigning(false);
+    }
+  };
+  
+  return (
+    <div className="transaction-signing">
+      <h3>Confirm Transaction</h3>
+      <div className="transaction-details">
+        {details.fromToken && (
+          <div>From: {details.amount} {details.fromToken}</div>
+        )}
+        {details.toToken && (
+          <div>To: {details.toToken}</div>
+        )}
+        {details.tokenName && (
+          <div>Token: {details.tokenName}</div>
+        )}
+      </div>
+      
+      <div className="actions">
+        <button onClick={handleSign} disabled={signing}>
+          {signing ? 'Signing...' : 'Sign Transaction'}
+        </button>
+        <button onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 };
 ```
 
-## CSS Styles
+#### **C. Enhanced Message Types**
+Update message types to handle new response formats:
 
-```css
-/* Flow Header */
-.flow-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+```typescript
+// types/chat.ts (modify existing)
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  metadata?: {
+    action?: string;
+    step?: string;
+    unsignedTransaction?: string;
+    swapDetails?: any;
+    tokenDetails?: any;
+  };
 }
 
-.flow-header h3 {
-  margin: 0;
-  color: #333;
-  font-size: 18px;
-}
-
-.cancel-button {
-  background: #dc3545;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.cancel-button:hover {
-  background: #c82333;
-}
-
-/* Image Upload */
-.image-upload-container {
-  width: 100%;
-  margin: 16px 0;
-}
-
-.upload-area {
-  border: 2px dashed #ccc;
-  border-radius: 12px;
-  padding: 40px 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background-color: #f9f9f9;
-}
-
-.upload-area:hover {
-  border-color: #007bff;
-  background-color: #f0f8ff;
-}
-
-.upload-area.drag-active {
-  border-color: #007bff;
-  background-color: #e6f3ff;
-}
-
-.upload-area.uploading {
-  border-color: #28a745;
-  background-color: #f0fff0;
-}
-
-.upload-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.upload-prompt p {
-  margin: 8px 0;
-  color: #666;
-}
-
-.upload-hint {
-  font-size: 14px;
-  color: #999;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Transaction Prompt */
-.transaction-prompt {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-  max-width: 500px;
-  width: 90%;
-  padding: 24px;
-  z-index: 1000;
-}
-
-.transaction-prompt h3 {
-  margin: 0 0 16px 0;
-  color: #333;
-}
-
-.token-info, .transaction-complete {
-  background: #f8f9fa;
-  padding: 16px;
-  border-radius: 8px;
-  margin: 16px 0;
-}
-
-.token-info code, .transaction-complete code {
-  display: block;
-  background: #e9ecef;
-  padding: 8px;
-  border-radius: 4px;
-  font-family: monospace;
-  word-break: break-all;
-  margin: 8px 0;
-}
-
-.sign-transaction-btn, .continue-btn {
-  background: #007bff;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  width: 100%;
-  margin-top: 16px;
-}
-
-.sign-transaction-btn:hover, .continue-btn:hover {
-  background: #0056b3;
-}
-
-.sign-transaction-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-/* Validation Error */
-.validation-error {
-  background: #f8d7da;
-  color: #721c24;
-  padding: 12px;
-  border-radius: 6px;
-  margin-bottom: 12px;
-  border: 1px solid #f5c6cb;
-}
-
-/* Text Input */
-.text-input-form {
-  width: 100%;
-}
-
-.input-container {
-  display: flex;
-  gap: 8px;
-}
-
-.text-input {
-  flex: 1;
-  padding: 12px 16px;
-  border: 1px solid #ddd;
-  border-radius: 24px;
-  font-size: 16px;
-  outline: none;
-}
-
-.text-input:focus {
-  border-color: #007bff;
-}
-
-.send-button {
-  padding: 12px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 24px;
-  cursor: pointer;
-  font-size: 16px;
-}
-
-.send-button:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-
-.send-button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+export interface ChatResponse {
+  prompt: string;
+  action?: string;
+  step?: string;
+  unsignedTransaction?: string;
+  requireSignature?: boolean;
+  swapDetails?: any;
+  tokenDetails?: any;
 }
 ```
 
-## Implementation Priority
+## 🔧 **3. Implementation Checklist**
 
-1. **CRITICAL**: Transaction Handling - Users can't complete actions without this
-2. **HIGH**: Multi-Step Flow Tracking - Needed for proper UX and validation
-3. **MEDIUM**: Image Upload Endpoint - Improves efficiency for large files
-4. **MEDIUM**: Flow Cancellation - Better user experience
-5. **MEDIUM**: Step-Specific Validation - Reduces errors and improves UX
+### **Balance Update System**
+- [ ] Create `useWalletBalance` hook
+- [ ] Create `WalletBalance` component
+- [ ] Create `TransactionHistory` component
+- [ ] Update Portfolio page to use real-time balance
+- [ ] Update Dashboard to show real-time balance
+- [ ] Test SSE connections
+- [ ] Test balance refresh functionality
 
-## Summary
+### **Smart Chat Modifications**
+- [ ] Update Chat component to handle multi-step flows
+- [ ] Create `TransactionSigning` component
+- [ ] Update message types
+- [ ] Handle different response actions (swap, create-token)
+- [ ] Test smart entity extraction
+- [ ] Test multi-step flow skipping
+- [ ] Test transaction signing flow
 
-This implementation focuses on frontend-specific functionality without duplicating backend logic. The key improvements are:
+## 🚀 **4. Key Benefits**
 
-- **Flow Type Detection**: Know which flow is active for proper UI/validation
-- **Transaction Processing**: Handle unsigned transactions and wallet integration
-- **Efficient Image Upload**: Use dedicated endpoint instead of base64
-- **Flow Management**: Cancel flows and reset state properly
-- **Input Validation**: Validate inputs before sending to backend
+### **Balance Update System**
+- ✅ **Real-time Updates**: Instant balance updates when external deposits are detected
+- ✅ **SSE Integration**: Server-sent events for live updates
+- ✅ **Transaction History**: Complete transaction tracking
+- ✅ **Performance**: Cached balance data with smart refresh
 
-These changes will significantly improve the user experience and make the app fully functional for token launches and swaps.
+### **Smart Chat Modifications**
+- ✅ **Intelligent Flows**: Skips completed steps, asks only what's missing
+- ✅ **Entity Extraction**: Understands natural language inputs
+- ✅ **Direct Confirmation**: Goes straight to confirmation when all info is available
+- ✅ **Transaction Signing**: Seamless transaction execution
+
+## 📝 **5. Testing Instructions**
+
+### **Balance Update Testing**
+1. Send external deposit to user wallet
+2. Verify balance updates in real-time
+3. Check transaction history updates
+4. Test SSE connection stability
+
+### **Smart Chat Testing**
+1. Test complete swap request: "I want to swap 5 USDC for SOL"
+2. Test partial swap request: "swap USDC for SOL"
+3. Test token creation: "create MyToken"
+4. Verify step skipping works correctly
+5. Test transaction signing flow
+
+## 🎯 **Summary**
+
+**Lovable needs to implement:**
+
+1. **Real-time Balance System**:
+   - `useWalletBalance` hook with SSE
+   - `WalletBalance` component
+   - `TransactionHistory` component
+   - Integration with Portfolio and Dashboard
+
+2. **Smart Chat Enhancements**:
+   - Enhanced Chat component for multi-step flows
+   - `TransactionSigning` component
+   - Updated message types
+   - Smart step handling
+
+**No breaking changes required** - all modifications are additive and enhance existing functionality! 🚀✨

@@ -237,65 +237,113 @@ Return ONLY valid JSON, no markdown:
   private extractSwapEntities(message: string): Record<string, any> {
     const entities: Record<string, any> = {};
     
-    // Extract amount first (more specific patterns)
-    const amountPatterns = [
-      /(\d+\.?\d*)\s+(SOL|USDC|USDT|BONK|WIF|JUP|JTO|PYTH|ORCA|RAY|tokens?)/i,
-      /swap\s+(\d+\.?\d*)\s+(SOL|USDC|USDT|BONK|WIF|JUP|JTO|PYTH|ORCA|RAY)/i,
-      /(\d+\.?\d*)\s+(SOL|USDC|USDT|BONK|WIF|JUP|JTO|PYTH|ORCA|RAY)\s+for/i
+    // Enhanced token list with more tokens
+    const tokens = [
+      'SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH', 'ORCA', 'RAY', 'SAMO', 'FIDA',
+      'RAY', 'SRM', 'MNGO', 'STEP', 'COPE', 'ROPE', 'KIN', 'MAPS', 'OXY', 'ATLAS', 'POLIS',
+      'LIKE', 'MEDIA', 'TULIP', 'SLND', 'PORT', 'mSOL', 'stSOL', 'scnSOL', 'ETH', 'BTC'
     ];
     
-    for (const pattern of amountPatterns) {
+    // Normalize message for better token detection
+    const normalizedMessage = message.toLowerCase()
+      .replace(/solana/g, 'SOL')
+      .replace(/sol\b/g, 'SOL')
+      .replace(/usdc/g, 'USDC')
+      .replace(/usdt/g, 'USDT')
+      .replace(/bonk/g, 'BONK');
+    
+    const upperMessage = normalizedMessage.toUpperCase();
+    
+    // Enhanced pattern matching for "X for Y" or "X to Y" patterns
+    const swapPatterns = [
+      /(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i,  // "1 SOL for USDC"
+      /(\w+)\s+(?:for|to)\s+(\w+)/i,                 // "SOL for USDC"
+      /swap\s+(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "swap 1 SOL for USDC"
+      /trade\s+(\d+\.?\d*)\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "trade 1 SOL for USDC"
+      /i\s+want\s+to\s+swap\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "I want to swap SOL for USDC"
+      /i\s+want\s+to\s+trade\s+(\w+)\s+(?:for|to)\s+(\w+)/i, // "I want to trade SOL for USDC"
+      /(\d+\.?\d*)\s+(?:solana|sol)\s+(?:for|to)\s+(\w+)/i, // "1 solana for USDC"
+      /(?:solana|sol)\s+(?:for|to)\s+(\w+)/i, // "solana for USDC"
+      /(\w+)\s+(?:for|to)\s+(?:solana|sol)/i, // "USDC for solana"
+    ];
+    
+    let foundMatch = false;
+    for (const pattern of swapPatterns) {
       const match = message.match(pattern);
       if (match) {
-        entities.amount = match[1];
-        // If amount is found with a token, that's likely the fromToken
-        if (match[2] && !entities.fromToken) {
-          entities.fromToken = match[2].toUpperCase();
+        console.log('[IntentClassifier] Pattern matched:', pattern.source, 'Match:', match);
+        
+        // Extract amount if present
+        if (match[1] && !isNaN(parseFloat(match[1]))) {
+          entities.amount = match[1];
         }
+        
+        // Extract tokens with better logic
+        let token1: string, token2: string;
+        
+        if (match.length === 4) {
+          // Pattern with amount: match[1] = amount, match[2] = token1, match[3] = token2
+          token1 = match[2].toUpperCase();
+          token2 = match[3].toUpperCase();
+        } else if (match.length === 3) {
+          // Pattern without amount: match[1] = token1, match[2] = token2
+          token1 = match[1].toUpperCase();
+          token2 = match[2].toUpperCase();
+        } else {
+          continue; // Skip malformed matches
+        }
+        
+        // Handle token name variations
+        if (token1 === 'SOLANA') token1 = 'SOL';
+        if (token2 === 'SOLANA') token2 = 'SOL';
+        
+        // Validate tokens against common list
+        if (tokens.includes(token1)) {
+          entities.fromToken = token1;
+        }
+        if (tokens.includes(token2)) {
+          entities.toToken = token2;
+        }
+        
+        foundMatch = true;
         break;
       }
     }
     
-    // Extract token symbols (common ones) - improved logic
-    const tokens = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH', 'ORCA', 'RAY'];
-    const upperMessage = message.toUpperCase();
-    
-    // Look for "for" pattern: "X for Y" or "X to Y"
-    const swapPattern = /(\w+)\s+(?:for|to)\s+(\w+)/i;
-    const swapMatch = message.match(swapPattern);
-    
-    if (swapMatch) {
-      const token1 = swapMatch[1].toUpperCase();
-      const token2 = swapMatch[2].toUpperCase();
+    // Fallback: if no pattern matched, try simple token detection
+    if (!foundMatch) {
+      console.log('[IntentClassifier] No pattern matched, trying fallback token detection');
       
-      if (tokens.includes(token1)) {
-        entities.fromToken = token1;
-      }
-      if (tokens.includes(token2)) {
-        entities.toToken = token2;
-      }
-    } else {
-      // Fallback: find tokens in order
       const foundTokens: string[] = [];
       for (const token of tokens) {
         if (upperMessage.includes(token)) {
           foundTokens.push(token);
         }
       }
-      
-      if (foundTokens.length >= 1) {
+
+      console.log('[IntentClassifier] Found tokens in fallback:', foundTokens);
+
+      // Assign found tokens
+      if (foundTokens.length > 0) {
         entities.fromToken = foundTokens[0];
       }
-      if (foundTokens.length >= 2) {
+      if (foundTokens.length > 1) {
         entities.toToken = foundTokens[1];
       }
-    }
 
-    // Extract amount if not found yet
-    if (!entities.amount) {
-      const amountMatch = message.match(/(\d+\.?\d*)/);
-      if (amountMatch) {
-        entities.amount = amountMatch[1];
+      // Extract amount - look for patterns like "5 SOL", "1.5 USDC", "100 tokens"
+      const amountPatterns = [
+        /(\d+\.?\d*)\s*(?:SOL|USDC|USDT|BONK|WIF|tokens?)/i,
+        /(?:swap|trade|exchange|convert|buy|sell)\s+(\d+\.?\d*)/i,
+        /(\d+\.?\d*)\s+(?:of|in)\s+(?:SOL|USDC|USDT|BONK)/i
+      ];
+
+      for (const pattern of amountPatterns) {
+        const match = message.match(pattern);
+        if (match && match[1]) {
+          entities.amount = match[1];
+          break;
+        }
       }
     }
 

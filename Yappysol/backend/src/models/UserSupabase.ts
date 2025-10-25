@@ -15,6 +15,29 @@ export interface User {
   updated_at: string;
 }
 
+export interface WalletInfo {
+  id: string;
+  publicKey: string;
+  balance: number;
+  isImported: boolean;
+  isDefault: boolean;
+}
+
+export interface TokenBalance {
+  symbol: string;
+  mint: string;
+  price: number;
+  image: string;
+  solscanUrl: string;
+  balance: number;
+  balanceUsd: number;
+}
+
+export interface UserWithWallets extends User {
+  wallets?: WalletInfo[];
+  portfolio?: TokenBalance[] | null;
+}
+
 export interface CreateUserData {
   email: string;
   password: string;

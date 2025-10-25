@@ -14,6 +14,7 @@ import { moralisService } from './lib/moralis';
 import heliusTestRoute from './routes/heliusTest';
 import transactionsRoutes from './routes/transactions';
 import portfolioRoutes from './routes/portfolio';
+import walletBalanceRoutes from './routes/walletBalance';
 
 dotenv.config();
 
@@ -63,5 +64,37 @@ app.use('/api/trending-tokens', trendingTokensRoutes);
 app.use('/api/helius-test', heliusTestRoute);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/portfolio', portfolioRoutes);
+app.use('/api/wallet', walletBalanceRoutes);
+
+// Initialize background services
+const initializeServices = async () => {
+  try {
+    // Start background balance update service (if enabled)
+    const enableBackgroundBalanceUpdate = process.env.BACKGROUND_BALANCE_UPDATE !== 'false';
+    if (enableBackgroundBalanceUpdate) {
+      const { backgroundBalanceUpdateService } = await import('./services/BackgroundBalanceUpdateService');
+      backgroundBalanceUpdateService.start();
+      console.log('✅ Background balance update service started');
+    } else {
+      console.log('⏸️ Background balance update service disabled (BACKGROUND_BALANCE_UPDATE=false)');
+    }
+
+    // Initialize WebSocket subscriber
+    const { websocketBalanceSubscriber } = await import('./services/WebsocketBalanceSubscriber');
+    await websocketBalanceSubscriber.subscribeToAllUserWallets();
+    console.log('✅ WebSocket balance subscriber initialized');
+
+    // Load platform wallets for external transaction detection
+    const { externalTransactionService } = await import('./services/ExternalTransactionService');
+    await externalTransactionService.loadPlatformWallets();
+    console.log('✅ External transaction service initialized');
+
+  } catch (error) {
+    console.error('❌ Error initializing services:', error);
+  }
+};
+
+// Initialize services after app setup
+initializeServices();
 
 export default app; 

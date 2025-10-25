@@ -55,7 +55,8 @@ router.post('/login', (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             username: result.user.username || null,
             onboardingCompleted: result.user.onboarding_completed || false,
             createdAt: result.user.created_at,
-            solBalance: 0
+            wallets: result.user.wallets || [],
+            portfolio: result.user.portfolio || null
         },
         token: result.token
     });
@@ -142,7 +143,8 @@ router.post('/privy', (0, asyncHandler_1.asyncHandler)(async (req, res) => {
                     username: result.user.username || null,
                     onboardingCompleted: result.user.onboarding_completed || false,
                     createdAt: result.user.created_at,
-                    solBalance: 0
+                    wallets: result.user.wallets || [],
+                    portfolio: result.user.portfolio || null
                 },
                 token: result.token
             });
