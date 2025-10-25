@@ -43,7 +43,77 @@ const checkUserOnboardingState = async () => {
 };
 ```
 
-#### 3. Add Username Editing to Settings
+#### 3. Add Private Key Export to Onboarding Flow
+Users need to export their private keys during onboarding. Add this step:
+
+```typescript
+const PrivateKeyExportStep: React.FC = () => {
+  const [wallets, setWallets] = useState([]);
+  const [selectedWalletId, setSelectedWalletId] = useState('');
+  const [password, setPassword] = useState('');
+  const [exportedWallet, setExportedWallet] = useState(null);
+
+  const loadWallets = async () => {
+    const response = await fetch('/api/user/private-keys', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    const data = await response.json();
+    setWallets(data.wallets);
+  };
+
+  const exportPrivateKey = async () => {
+    const response = await fetch('/api/user/private-keys/export', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        walletId: selectedWalletId,
+        password: password
+      })
+    });
+    const data = await response.json();
+    setExportedWallet(data.wallet);
+  };
+
+  return (
+    <div className="onboarding-step">
+      <h2>🔐 Export Your Private Key</h2>
+      <p>Step 5 of 6 - Save your private key for backup</p>
+      
+      <select value={selectedWalletId} onChange={(e) => setSelectedWalletId(e.target.value)}>
+        {wallets.map(wallet => (
+          <option key={wallet.id} value={wallet.id}>
+            {wallet.publicKey}
+          </option>
+        ))}
+      </select>
+      
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Enter your password"
+      />
+      
+      <button onClick={exportPrivateKey}>Export Private Key</button>
+      
+      {exportedWallet && (
+        <div className="exported-key">
+          <h4>Private Key:</h4>
+          <code>{exportedWallet.privateKey}</code>
+          <button onClick={() => navigator.clipboard.writeText(exportedWallet.privateKey)}>
+            Copy to Clipboard
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+#### 4. Add Username Editing to Settings
 Users need to change usernames. Implement this component:
 
 ```typescript
@@ -104,19 +174,27 @@ const UsernameEditComponent = () => {
 - `PUT /api/user/whitelisted-addresses/:id`
 - `DELETE /api/user/whitelisted-addresses/:id`
 
+#### Private Key Export:
+- `GET /api/user/private-keys` - List user's wallets
+- `POST /api/user/private-keys/export` - Export private key (requires password)
+
 ### 🎯 PRIORITY ORDER
 
 1. **CRITICAL**: Fix API endpoint URLs (fixes JSON parsing errors)
 2. **HIGH**: Fix onboarding state management (users stuck on username step)
-3. **MEDIUM**: Add username editing to settings page
-4. **LOW**: Add debouncing to username checks (prevents rate limiting)
+3. **HIGH**: Add private key export to onboarding flow
+4. **MEDIUM**: Add username editing to settings page
+5. **MEDIUM**: Add private key export functionality to settings
+6. **LOW**: Add debouncing to username checks (prevents rate limiting)
 
 ### ✅ EXPECTED RESULTS
 
 After fixes:
 - ✅ No more console JSON parsing errors
 - ✅ Users can complete onboarding after refresh
+- ✅ Users can export private keys during onboarding
 - ✅ Username editing works in settings
+- ✅ Private key export works in settings
 - ✅ All password management works
 - ✅ Whitelisted addresses work
 
@@ -126,6 +204,7 @@ I've created these guides for you:
 - `Frontend_API_Error_Fix_Guide.md` - Complete API fix guide
 - `Frontend_Onboarding_State_Management_Guide.md` - Onboarding fixes
 - `Settings_Username_Editing_Guide.md` - Username editing implementation
+- `Private_Key_Export_Implementation_Guide.md` - Private key export implementation
 - `Frontend_Username_Debouncing_Guide.md` - Rate limiting prevention
 
 **Start with fixing the API endpoint URLs - this will immediately resolve the console errors and get users unstuck!**
@@ -287,6 +366,7 @@ const SettingsPage: React.FC = () => {
       <div className="settings-section">
         <h2>Security</h2>
         <PasswordManagementComponent />
+        <PrivateKeyExportComponent />
       </div>
 
       <div className="settings-section">
@@ -298,12 +378,82 @@ const SettingsPage: React.FC = () => {
 };
 ```
 
+### Private Key Export Component
+
+```typescript
+const PrivateKeyExportComponent: React.FC = () => {
+  const [wallets, setWallets] = useState([]);
+  const [selectedWalletId, setSelectedWalletId] = useState('');
+  const [password, setPassword] = useState('');
+  const [exportedWallet, setExportedWallet] = useState(null);
+
+  const loadWallets = async () => {
+    const response = await fetch('/api/user/private-keys', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    const data = await response.json();
+    setWallets(data.wallets);
+  };
+
+  const exportPrivateKey = async () => {
+    const response = await fetch('/api/user/private-keys/export', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        walletId: selectedWalletId,
+        password: password
+      })
+    });
+    const data = await response.json();
+    setExportedWallet(data.wallet);
+  };
+
+  return (
+    <div className="private-key-export">
+      <h3>Export Private Keys</h3>
+      
+      <select value={selectedWalletId} onChange={(e) => setSelectedWalletId(e.target.value)}>
+        {wallets.map(wallet => (
+          <option key={wallet.id} value={wallet.id}>
+            {wallet.publicKey}
+          </option>
+        ))}
+      </select>
+      
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Enter your password"
+      />
+      
+      <button onClick={exportPrivateKey}>Export Private Key</button>
+      
+      {exportedWallet && (
+        <div className="exported-key">
+          <h4>Private Key:</h4>
+          <code>{exportedWallet.privateKey}</code>
+          <button onClick={() => navigator.clipboard.writeText(exportedWallet.privateKey)}>
+            Copy to Clipboard
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
 ## 🚀 QUICK START CHECKLIST
 
 - [ ] **Update all API calls** to use `/api/user/` prefix
 - [ ] **Add proper headers** (Content-Type, Authorization)
 - [ ] **Fix onboarding state management** to skip completed steps
+- [ ] **Add private key export** to onboarding flow (Step 5 of 6)
 - [ ] **Add username editing** to settings page
+- [ ] **Add private key export** to settings page
 - [ ] **Test all functionality** after changes
 - [ ] **Check console** for any remaining errors
 

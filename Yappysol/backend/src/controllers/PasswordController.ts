@@ -121,6 +121,22 @@ export class PasswordController {
    * Verify app password
    * POST /api/user/password/verify
    */
+  // Internal method for password verification (used by other controllers)
+  static async verifyPasswordInternal(userId: string, password: string): Promise<boolean> {
+    try {
+      const user = await UserModel.findById(userId);
+      if (!user || !user.app_password_hash) {
+        return false;
+      }
+
+      const bcrypt = require('bcrypt');
+      return await bcrypt.compare(password, user.app_password_hash);
+    } catch (error) {
+      console.error('[PasswordController] Error verifying password internally:', error);
+      return false;
+    }
+  }
+
   static async verifyPassword(req: Request, res: Response) {
     try {
       const { password } = req.body;

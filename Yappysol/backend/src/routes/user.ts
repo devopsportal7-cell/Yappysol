@@ -179,6 +179,7 @@ router.get('/onboarding/status', authMiddleware, asyncHandler(async (req, res) =
     username: user.username,
     hasPassword: !!user.app_password_hash,
     hasWallet: false, // TODO: Check wallet status
+    hasExportedPrivateKey: false, // TODO: Track if user has exported private key
     canProceed: true
   };
 
@@ -190,8 +191,10 @@ router.get('/onboarding/status', authMiddleware, asyncHandler(async (req, res) =
     progress.step = 3; // Password step
   } else if (!progress.hasWallet) {
     progress.step = 4; // Wallet step
+  } else if (!progress.hasExportedPrivateKey) {
+    progress.step = 5; // Private key export step
   } else {
-    progress.step = 5; // Complete
+    progress.step = 6; // Complete
   }
 
   res.json({
