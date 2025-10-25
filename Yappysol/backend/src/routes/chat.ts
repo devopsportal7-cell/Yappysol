@@ -142,6 +142,8 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
           content: response.prompt || (response as any).message || 'No response',
           role: 'assistant',
           action: response.action,
+          step: response.step,
+          flowType: response.flowType,
           created_at: new Date().toISOString()
         };
         await ChatSessionModel.addMessage(currentSessionId, assistantMessage);

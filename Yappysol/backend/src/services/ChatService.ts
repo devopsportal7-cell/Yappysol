@@ -8,6 +8,7 @@ import { TrendingService } from './TrendingService';
 import { IntentClassifier } from './IntentClassifier';
 import { EntityExtractor } from './EntityExtractor';
 import { RAGService } from './RAGService';
+import { ChatSessionModel } from '../models/ChatSessionSupabase';
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
@@ -475,6 +476,25 @@ Be enthusiastic about the Solana ecosystem!`;
       console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
       console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
     
+      // Attempt to recover flowType from session if not present in context but currentStep is
+      if (!context.flowType && context.currentStep && context.sessionId) {
+        try {
+          const chatSession = await ChatSessionModel.findById(context.sessionId);
+          if (chatSession && chatSession.messages.length > 0) {
+            // Find the last AI message that had a flowType
+            const lastAiMessageWithFlow = chatSession.messages
+              .filter((msg: any) => msg.role === 'assistant' && msg.flowType)
+              .pop();
+            if (lastAiMessageWithFlow) {
+              context.flowType = lastAiMessageWithFlow.flowType;
+              console.log(`[chatWithOpenAI] Recovered flowType '${context.flowType}' from session for step continuation.`);
+            }
+          }
+        } catch (error) {
+          console.error('[chatWithOpenAI] Error recovering flowType from session:', error);
+        }
+      }
+    
       // Check if we're in a step flow - this takes priority over intent detection
       if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
         console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
@@ -490,6 +510,7 @@ Be enthusiastic about the Solana ecosystem!`;
               prompt: swapResult.prompt,
               step: swapResult.step,
               action: 'swap',
+              flowType: 'swap',
               unsignedTransaction: swapResult.unsignedTransaction,
               requireSignature: swapResult.requireSignature,
               swapDetails: swapResult.swapDetails
@@ -515,6 +536,7 @@ Be enthusiastic about the Solana ecosystem!`;
               prompt: creationResult.prompt,
               step: creationResult.step,
               action: 'create-token',
+              flowType: 'token-creation',
               unsignedTransaction: creationResult.unsignedTransaction,
               requireSignature: creationResult.requireSignature,
               tokenDetails: (creationResult as any).tokenDetails
@@ -535,8 +557,9 @@ Be enthusiastic about the Solana ecosystem!`;
               return {
                 prompt: swapResult.prompt,
                 step: swapResult.step,
-                action: 'swap',
-                unsignedTransaction: swapResult.unsignedTransaction,
+              action: 'swap',
+              flowType: 'swap',
+              unsignedTransaction: swapResult.unsignedTransaction,
                 requireSignature: swapResult.requireSignature,
                 swapDetails: swapResult.swapDetails
               };
@@ -631,8 +654,9 @@ Be enthusiastic about the Solana ecosystem!`;
               return {
                 prompt: swapResult.prompt,
                 step: swapResult.step,
-                action: 'swap',
-                unsignedTransaction: swapResult.unsignedTransaction,
+              action: 'swap',
+              flowType: 'swap',
+              unsignedTransaction: swapResult.unsignedTransaction,
                 requireSignature: swapResult.requireSignature,
                 swapDetails: swapResult.swapDetails
               };
@@ -772,8 +796,9 @@ Be enthusiastic about the Solana ecosystem!`;
         return {
           prompt: swapResult.prompt,
           step: swapResult.step,
-          action: 'swap',
-          unsignedTransaction: swapResult.unsignedTransaction,
+              action: 'swap',
+              flowType: 'swap',
+              unsignedTransaction: swapResult.unsignedTransaction,
           requireSignature: swapResult.requireSignature,
           swapDetails: swapResult.swapDetails
         };

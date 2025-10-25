@@ -7,6 +7,8 @@ export interface ChatMessage {
   role: string;
   attachments?: any[];
   action?: string;
+  step?: string;
+  flowType?: string;
   created_at: string;
 }
 
