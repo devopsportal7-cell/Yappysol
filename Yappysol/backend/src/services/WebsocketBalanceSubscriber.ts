@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { logger } from '../utils/logger';
 import { externalTransactionService } from '../services/ExternalTransactionService';
+import { TABLES } from '../lib/supabase';
 
 export class WebsocketBalanceSubscriber {
   private ws: WebSocket | null = null;
@@ -22,12 +23,18 @@ export class WebsocketBalanceSubscriber {
       const wssUrl = process.env.HELIUS_WSS_URL || 'wss://api.helius.xyz/v0/websocket';
       
       if (!apiKey) {
-        logger.error('[WSS] HELIUS_API_KEY not configured');
+        logger.error('[WSS] HELIUS_API_KEY not configured - WebSocket disabled');
+        return;
+      }
+
+      // Validate API key format
+      if (apiKey.length < 10) {
+        logger.error('[WSS] HELIUS_API_KEY appears to be invalid - WebSocket disabled');
         return;
       }
 
       const wsUrl = `${wssUrl}?api-key=${apiKey}`;
-      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl });
+      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl.replace(apiKey, '***') });
 
       this.ws = new WebSocket(wsUrl);
 
@@ -53,7 +60,7 @@ export class WebsocketBalanceSubscriber {
       });
 
       this.ws.on('error', (error) => {
-        logger.error('[WSS] WebSocket error', { error });
+        logger.error('[WSS] WebSocket error', { error: error.message || error });
         this.isConnected = false;
       });
 
@@ -354,7 +361,7 @@ export class WebsocketBalanceSubscriber {
       const { supabase } = await import('../lib/supabase');
       
       const { data: wallets, error } = await supabase
-        .from('wallets')
+        .from(TABLES.WALLETS)
         .select('public_key');
 
       if (error || !wallets) {

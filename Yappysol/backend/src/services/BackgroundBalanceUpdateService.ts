@@ -2,6 +2,7 @@ import { logger } from '../utils/logger';
 import { externalTransactionService } from '../services/ExternalTransactionService';
 import { heliusBalanceService } from '../services/HeliusBalanceService';
 import { balanceCacheService } from '../services/BalanceCacheService';
+import { TABLES } from '../lib/supabase';
 
 export class BackgroundBalanceUpdateService {
   private intervalId: NodeJS.Timeout | null = null;
@@ -71,7 +72,7 @@ export class BackgroundBalanceUpdateService {
       const { supabase } = await import('../lib/supabase');
       
       const { data: wallets, error } = await supabase
-        .from('wallets')
+        .from(TABLES.WALLETS)
         .select('public_key, user_id')
         .eq('is_active', true);
 
