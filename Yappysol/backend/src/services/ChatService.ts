@@ -492,7 +492,13 @@ Be enthusiastic about the Solana ecosystem!`;
           }
         } catch (error) {
           console.error('[chatWithOpenAI] Error recovering flowType from session:', error);
+          // Continue without flowType recovery
         }
+      }
+      
+      // Validate context for step continuation
+      if (context.currentStep && !context.flowType) {
+        console.warn('[chatWithOpenAI] Step continuation without flowType - this may cause routing issues');
       }
     
       // Check if we're in a step flow - this takes priority over intent detection
@@ -589,6 +595,7 @@ Be enthusiastic about the Solana ecosystem!`;
           } else {
             // No clear context, try to determine from the original message
             console.log('[chatWithOpenAI] No clear flow context for shared step, falling back to intent detection');
+            console.warn('[chatWithOpenAI] Step continuation without recognized flowType - this may cause routing issues');
             // Fall through to intent detection below
           }
         }
@@ -602,7 +609,7 @@ Be enthusiastic about the Solana ecosystem!`;
       console.log('[chatWithOpenAI] Intent classification result:', intentResult);
 
       // If AI classification is confident, use it to route intelligently
-      if (intentResult.confidence >= 0.7) {
+      if (intentResult.confidence >= 0.8) { // Higher threshold for more reliable routing
         console.log('[chatWithOpenAI] Using AI-classified intent:', intentResult.intent);
         console.log('[chatWithOpenAI] Is actionable:', intentResult.isActionable);
         
@@ -724,7 +731,8 @@ Be enthusiastic about the Solana ecosystem!`;
               const trendingPrompt = this.formatTrendingTokens(trendingTokens);
               return { 
                 prompt: trendingPrompt,
-                action: 'trending'
+                action: 'trending',
+                flowType: 'trending'
               };
             } catch (error) {
               console.error('[chatWithOpenAI] Error in AI-routed trending:', error);
@@ -796,9 +804,9 @@ Be enthusiastic about the Solana ecosystem!`;
         return {
           prompt: swapResult.prompt,
           step: swapResult.step,
-              action: 'swap',
-              flowType: 'swap',
-              unsignedTransaction: swapResult.unsignedTransaction,
+          action: 'swap',
+          flowType: 'swap',
+          unsignedTransaction: swapResult.unsignedTransaction,
           requireSignature: swapResult.requireSignature,
           swapDetails: swapResult.swapDetails
         };
@@ -825,6 +833,7 @@ Be enthusiastic about the Solana ecosystem!`;
           prompt: creationResult.prompt,
           step: creationResult.step,
           action: 'create-token',
+          flowType: 'token-creation',
           unsignedTransaction: creationResult.unsignedTransaction,
           requireSignature: creationResult.requireSignature,
           tokenDetails: (creationResult as any).tokenDetails
@@ -844,6 +853,7 @@ Be enthusiastic about the Solana ecosystem!`;
         return { 
           prompt: conversationalResponse,
           action: 'trending',
+          flowType: 'trending',
           tokens: trendingTokens // Include raw data for frontend
         };
       } catch (error) {

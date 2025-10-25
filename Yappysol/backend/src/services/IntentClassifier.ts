@@ -13,7 +13,7 @@ export interface IntentResult {
 export class IntentClassifier {
   private cache: Map<string, IntentResult> = new Map();
   private readonly CACHE_SIZE = 100;
-  private readonly MIN_CONFIDENCE = 0.7;
+  private readonly MIN_CONFIDENCE = 0.8; // Higher threshold for more reliable classification
 
   /**
    * Classify user intent using AI with fallback to keyword matching
@@ -83,6 +83,8 @@ For price: tokenSymbol, timeframe
 For portfolio: timeframe
 For trending: timeframe, limit
 
+IMPORTANT: Be conservative with confidence scores. Only return high confidence (0.8+) for clear cases.
+
 Return ONLY valid JSON, no markdown:
 {
   "intent": "swap|launch|price|portfolio|trending|general",
@@ -95,7 +97,7 @@ Return ONLY valid JSON, no markdown:
         role: 'user',
         content: message
       }],
-      temperature: 0.3,
+      temperature: 0.1, // Lower temperature for more consistent classification
       max_tokens: 200
     });
 
