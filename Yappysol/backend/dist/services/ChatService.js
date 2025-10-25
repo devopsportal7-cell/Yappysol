@@ -441,17 +441,25 @@ Be enthusiastic about the Solana ecosystem!`;
             console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
             // Attempt to recover flowType from session if not present in context but currentStep is
             if (!context.flowType && context.currentStep && context.sessionId) {
+                console.log('[chatWithOpenAI] Attempting flowType recovery from session:', context.sessionId);
                 try {
                     const chatSession = await ChatSessionSupabase_1.ChatSessionModel.findById(context.sessionId);
                     if (chatSession && chatSession.messages.length > 0) {
+                        console.log('[chatWithOpenAI] Session found with', chatSession.messages.length, 'messages');
                         // Find the last AI message that had a flowType
                         const lastAiMessageWithFlow = chatSession.messages
                             .filter((msg) => msg.role === 'assistant' && msg.flowType)
                             .pop();
                         if (lastAiMessageWithFlow) {
                             context.flowType = lastAiMessageWithFlow.flowType;
-                            console.log(`[chatWithOpenAI] Recovered flowType '${context.flowType}' from session for step continuation.`);
+                            console.log(`[chatWithOpenAI] ✅ Successfully recovered flowType '${context.flowType}' from session for step continuation.`);
                         }
+                        else {
+                            console.log('[chatWithOpenAI] ❌ No AI message with flowType found in session');
+                        }
+                    }
+                    else {
+                        console.log('[chatWithOpenAI] ❌ Session not found or empty');
                     }
                 }
                 catch (error) {
@@ -459,14 +467,46 @@ Be enthusiastic about the Solana ecosystem!`;
                     // Continue without flowType recovery
                 }
             }
+            else if (!context.flowType && context.currentStep) {
+                console.log('[chatWithOpenAI] ⚠️ Step continuation without sessionId - cannot recover flowType');
+            }
             // Validate context for step continuation
             if (context.currentStep && !context.flowType) {
-                console.warn('[chatWithOpenAI] Step continuation without flowType - this may cause routing issues');
+                console.warn('[chatWithOpenAI] Step continuation without flowType - attempting to infer from step pattern');
+                // Try to infer flowType from step pattern as last resort
+                if (context.currentStep === 'fromToken' || context.currentStep === 'toToken') {
+                    context.flowType = 'swap';
+                    console.log('[chatWithOpenAI] 🔍 Inferred flowType as "swap" from step:', context.currentStep);
+                }
+                else if (context.currentStep === 'tokenName' || context.currentStep === 'tokenSymbol' || context.currentStep === 'description') {
+                    context.flowType = 'token-creation';
+                    console.log('[chatWithOpenAI] 🔍 Inferred flowType as "token-creation" from step:', context.currentStep);
+                }
+                else {
+                    console.warn('[chatWithOpenAI] ⚠️ Cannot infer flowType from step:', context.currentStep);
+                }
             }
             // Check if we're in a step flow - this takes priority over intent detection
             if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
                 console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
                 console.log('[chatWithOpenAI] Step flow context:', JSON.stringify(context, null, 2));
+                // Re-extract entities from the current message to enhance context
+                try {
+                    console.log('[chatWithOpenAI] Re-extracting entities for step continuation...');
+                    const reExtractedEntities = await this.entityExtractor.extractEntities(message, 'swap');
+                    console.log('[chatWithOpenAI] Re-extracted entities:', reExtractedEntities);
+                    // Merge re-extracted entities into context (don't overwrite existing ones)
+                    Object.keys(reExtractedEntities).forEach(key => {
+                        if (reExtractedEntities[key] && !context[key]) {
+                            context[key] = reExtractedEntities[key];
+                            console.log(`[chatWithOpenAI] Added ${key}: ${reExtractedEntities[key]} to context`);
+                        }
+                    });
+                }
+                catch (error) {
+                    console.error('[chatWithOpenAI] Error re-extracting entities:', error);
+                    // Continue without re-extraction
+                }
                 // Determine which service to route to based on the step AND flow type
                 // Check for swap flow first (more specific steps)
                 if (context.currentStep === 'fromToken' || context.currentStep === 'toToken') {
@@ -516,8 +556,15 @@ Be enthusiastic about the Solana ecosystem!`;
                 }
                 // Handle shared steps (amount, confirmation) based on flow context
                 if (context.currentStep === 'amount' || context.currentStep === 'confirmation') {
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - Current step:', context.currentStep);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - flowType:', context.flowType);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - fromToken:', context.fromToken);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - toToken:', context.toToken);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - tokenName:', context.tokenName);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - tokenSymbol:', context.tokenSymbol);
                     // Check if we have flow context to determine which service to use
-                    if (context.flowType === 'swap' || context.fromToken || context.toToken) {
+                    // PRIORITY: Explicit flowType first, then context clues
+                    if (context.flowType === 'swap' || (context.fromToken || context.toToken)) {
                         console.log('[chatWithOpenAI] Routing to: swap service (shared step - swap context)');
                         try {
                             const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);

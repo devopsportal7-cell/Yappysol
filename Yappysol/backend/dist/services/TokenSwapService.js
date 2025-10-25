@@ -246,8 +246,15 @@ class TokenSwapService {
         let session = exports.swapSessions[userId] || { step: null };
         // SMART ENTITY HANDLING: Check if entities are provided in context
         const hasPreExtractedEntities = context.fromToken || context.toToken || context.amount;
+        console.log('[TokenSwapService] 🔍 ENTITY DEBUG - Context received:', {
+            fromToken: context.fromToken,
+            toToken: context.toToken,
+            amount: context.amount,
+            currentStep: context.currentStep,
+            flowType: context.flowType
+        });
         if (hasPreExtractedEntities) {
-            console.log('[TokenSwapService] Pre-extracted entities found:', {
+            console.log('[TokenSwapService] ✅ Pre-extracted entities found:', {
                 fromToken: context.fromToken,
                 toToken: context.toToken,
                 amount: context.amount
@@ -269,7 +276,13 @@ class TokenSwapService {
             }
             // Determine the next missing step intelligently
             const nextMissingStep = this.getNextMissingStep(session);
-            console.log('[TokenSwapService] Next missing step:', nextMissingStep);
+            console.log('[TokenSwapService] 🔍 Next missing step determined:', nextMissingStep);
+            console.log('[TokenSwapService] 🔍 Session state after entity population:', {
+                fromToken: session.fromToken,
+                toToken: session.toToken,
+                amount: session.amount,
+                step: session.step
+            });
             if (nextMissingStep) {
                 session.step = nextMissingStep;
                 exports.swapSessions[userId] = session;
