@@ -221,6 +221,7 @@ class TokenSwapService {
         return {
             prompt: summary,
             step: 'confirmation',
+            flowType: 'swap',
             requireSignature: false,
             swapDetails: {
                 fromToken: session.fromToken,
@@ -274,7 +275,7 @@ class TokenSwapService {
                 exports.swapSessions[userId] = session;
                 // Return prompt for the missing step
                 const prompt = this.getStepPrompt(nextMissingStep, session);
-                return { prompt, step: nextMissingStep };
+                return { prompt, step: nextMissingStep, flowType: 'swap' };
             }
             else {
                 // All required information is available, go to confirmation
@@ -329,7 +330,7 @@ class TokenSwapService {
             step = 'fromToken';
             session.step = step;
             exports.swapSessions[userId] = session;
-            return { prompt: 'Which token do you want to swap from? (contract address or ticker)', step };
+            return { prompt: 'Which token do you want to swap from? (contract address or ticker)', step, flowType: 'swap' };
         }
         // Handle back
         if (userInput.toLowerCase() === 'back') {
@@ -388,7 +389,7 @@ class TokenSwapService {
                     prompt = 'Invalid step.';
                     break;
             }
-            return { prompt, step: nextStep };
+            return { prompt, step: nextStep, flowType: 'swap' };
         }
         // If we've completed all steps, handle the confirmation
         if (nextStep === 'confirmation') {

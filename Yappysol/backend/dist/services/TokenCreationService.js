@@ -607,7 +607,7 @@ class TokenCreationService {
             exports.tokenCreationSessions[userId] = session;
             const prompt = 'What is the name of your token?';
             console.log('[DEBUG] Returning step:', step, 'prompt:', prompt);
-            return { prompt, step };
+            return { prompt, step, flowType: 'token-creation' };
         }
         // Handle back
         if (userInput.toLowerCase() === 'back') {
@@ -756,7 +756,7 @@ class TokenCreationService {
                     break;
             }
             console.log('[DEBUG] Returning step:', nextStep, 'prompt:', prompt);
-            return { prompt, step: nextStep };
+            return { prompt, step: nextStep, flowType: 'token-creation' };
         }
         // If we've completed all steps, handle the confirmation
         if (step === 'confirmation') {
