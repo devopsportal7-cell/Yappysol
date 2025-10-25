@@ -36,6 +36,9 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
   console.log('[CHAT] Using direct backend processing');
   
   try {
+    // Save user message to session if sessionId provided
+    let currentSessionId = sessionId;
+    
     // Add wallet address to context if available
     const enhancedContext = {
       ...context,
@@ -43,10 +46,26 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
       walletAddress: context.walletAddress || context.wallet?.publicKey
     };
     
+    // Recover flowType from session if we have a currentStep but no flowType
+    if (enhancedContext.currentStep && !enhancedContext.flowType && currentSessionId) {
+      try {
+        const session = await ChatSessionModel.findById(currentSessionId);
+        if (session && session.messages.length > 0) {
+          // Find the last AI message that had a flowType
+          const lastAiMessageWithFlow = session.messages
+            .filter((msg: any) => msg.role === 'assistant' && msg.flowType)
+            .pop();
+          if (lastAiMessageWithFlow) {
+            enhancedContext.flowType = lastAiMessageWithFlow.flowType;
+            console.log(`[CHAT] ✅ Recovered flowType '${enhancedContext.flowType}' from session`);
+          }
+        }
+      } catch (error) {
+        console.error('[CHAT] Error recovering flowType from session:', error);
+      }
+    }
+    
     console.log('[CHAT] Enhanced context:', enhancedContext);
-
-    // Save user message to session if sessionId provided
-    let currentSessionId = sessionId;
     if (currentSessionId) {
       try {
         const userMessage = {
@@ -91,25 +110,55 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
     if (enhancedContext.currentStep) {
       console.log('[CHAT] Continuing step flow:', enhancedContext.currentStep);
       
-      // Determine which service to route to based on the step
-      // Token creation steps (more specific, check first)
-      if (enhancedContext.currentStep === 'image' || enhancedContext.currentStep === 'name' || 
-          enhancedContext.currentStep === 'symbol' || enhancedContext.currentStep === 'description' ||
-          enhancedContext.currentStep === 'twitter' || enhancedContext.currentStep === 'telegram' ||
-          enhancedContext.currentStep === 'website' || enhancedContext.currentStep === 'pool' ||
-          enhancedContext.currentStep === 'amount' || enhancedContext.currentStep === 'confirmation') {
+      // Determine which service to route to based on the step AND flowType
+      // Check for swap-specific steps first
+      if (enhancedContext.currentStep === 'fromToken' || enhancedContext.currentStep === 'toToken') {
+        console.log('[CHAT] Routing to: swap service (step continuation)');
+        const swapService = new TokenSwapService();
+        response = await swapService.handleSwapIntent(message, enhancedContext);
+        if (response) {
+          response.action = 'swap';
+        }
+      }
+      // Check for token creation-specific steps
+      else if (enhancedContext.currentStep === 'image' || enhancedContext.currentStep === 'name' || 
+               enhancedContext.currentStep === 'symbol' || enhancedContext.currentStep === 'description' ||
+               enhancedContext.currentStep === 'twitter' || enhancedContext.currentStep === 'telegram' ||
+               enhancedContext.currentStep === 'website' || enhancedContext.currentStep === 'pool') {
         console.log('[CHAT] Routing to: token creation service (step continuation)');
         const tokenCreationService = new TokenCreationService();
         response = await tokenCreationService.handleCreationIntent(message, enhancedContext);
         if (response) {
           response.action = 'create-token';
         }
-      } else if (enhancedContext.currentStep === 'fromToken' || enhancedContext.currentStep === 'toToken') {
-        console.log('[CHAT] Routing to: swap service (step continuation)');
-        const swapService = new TokenSwapService();
-        response = await swapService.handleSwapIntent(message, enhancedContext);
-        if (response) {
-          response.action = 'swap';
+      }
+      // Handle shared steps (amount, confirmation) based on flowType
+      else if (enhancedContext.currentStep === 'amount' || enhancedContext.currentStep === 'confirmation') {
+        console.log('[CHAT] 🔍 SHARED STEP DEBUG - Current step:', enhancedContext.currentStep);
+        console.log('[CHAT] 🔍 SHARED STEP DEBUG - flowType:', enhancedContext.flowType);
+        console.log('[CHAT] 🔍 SHARED STEP DEBUG - fromToken:', enhancedContext.fromToken);
+        console.log('[CHAT] 🔍 SHARED STEP DEBUG - toToken:', enhancedContext.toToken);
+        
+        // Check if we have flow context to determine which service to use
+        if (enhancedContext.flowType === 'swap' || enhancedContext.fromToken || enhancedContext.toToken) {
+          console.log('[CHAT] Routing to: swap service (shared step - swap context)');
+          const swapService = new TokenSwapService();
+          response = await swapService.handleSwapIntent(message, enhancedContext);
+          if (response) {
+            response.action = 'swap';
+          }
+        } else if (enhancedContext.flowType === 'token-creation' || enhancedContext.tokenName || enhancedContext.tokenSymbol) {
+          console.log('[CHAT] Routing to: token creation service (shared step - creation context)');
+          const tokenCreationService = new TokenCreationService();
+          response = await tokenCreationService.handleCreationIntent(message, enhancedContext);
+          if (response) {
+            response.action = 'create-token';
+          }
+        } else {
+          // No clear context, try to determine from the original message
+          console.log('[CHAT] No clear flow context for shared step, falling back to intent detection');
+          const chatService = new ChatService();
+          response = await chatService.chatWithOpenAI(message, enhancedContext);
         }
       } else {
         // Unknown step, fall back to general chat
