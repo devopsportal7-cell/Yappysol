@@ -19,22 +19,17 @@ export class WebsocketBalanceSubscriber {
 
   private connect() {
     try {
-      const apiKey = process.env.HELIUS_API_KEY;
-      const wssUrl = process.env.HELIUS_WSS_URL || 'wss://api.helius.xyz/v0/websocket';
+      // Use Solana WebSocket endpoint from environment
+      const wssUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
       
-      if (!apiKey) {
-        logger.error('[WSS] HELIUS_API_KEY not configured - WebSocket disabled');
-        return;
+      // If SOLANA_WSS_URL already contains API key, use it as-is
+      // Otherwise, append the API key
+      let wsUrl = wssUrl;
+      if (!wssUrl.includes('api-key=') && process.env.HELIUS_API_KEY) {
+        wsUrl = `${wssUrl}?api-key=${process.env.HELIUS_API_KEY}`;
       }
-
-      // Validate API key format
-      if (apiKey.length < 10) {
-        logger.error('[WSS] HELIUS_API_KEY appears to be invalid - WebSocket disabled');
-        return;
-      }
-
-      const wsUrl = `${wssUrl}?api-key=${apiKey}`;
-      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl.replace(apiKey, '***') });
+      
+      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl.replace(/api-key=[^&]+/, 'api-key=***') });
 
       this.ws = new WebSocket(wsUrl);
 

@@ -63,6 +63,16 @@ export class HeliusBalanceService {
 
       const processedTokens = [];
 
+      // Ensure tokenBalances is iterable
+      if (!Array.isArray(tokenBalances)) {
+        logger.warn('[HELIUS] tokenBalances is not iterable', { tokenBalances, walletAddress });
+        return {
+          totalSolValue: solBalance,
+          totalUsdValue: solBalance * 100, // Fallback USD calculation
+          tokens: []
+        };
+      }
+
       for (const token of tokenBalances) {
         const priceUsd = await this.getTokenPrice(token.mint);
         const solPrice = await this.getSolPrice();
@@ -119,11 +129,23 @@ export class HeliusBalanceService {
       );
 
       if (!response.ok) {
-        throw new Error(`Helius API error: ${response.status} ${response.statusText}`);
+        logger.error('[HELIUS] API error', { 
+          status: response.status, 
+          statusText: response.statusText,
+          walletAddress 
+        });
+        return [];
       }
 
       const data = await response.json();
-      return data || [];
+      
+      // Handle case where API returns empty or invalid data
+      if (!Array.isArray(data)) {
+        logger.warn('[HELIUS] Invalid token balances response', { data, walletAddress });
+        return [];
+      }
+
+      return data;
     } catch (error) {
       logger.error('[HELIUS] Error fetching token balances', { error, walletAddress });
       return [];
@@ -140,10 +162,21 @@ export class HeliusBalanceService {
       );
 
       if (!response.ok) {
-        throw new Error(`Helius API error: ${response.status} ${response.statusText}`);
+        logger.error('[HELIUS] API error for SOL balance', { 
+          status: response.status, 
+          statusText: response.statusText,
+          walletAddress 
+        });
+        return 0;
       }
 
       const data = await response.json();
+      
+      // Handle case where API returns empty or invalid data
+      if (!Array.isArray(data)) {
+        logger.warn('[HELIUS] Invalid SOL balance response', { data, walletAddress });
+        return 0;
+      }
       
       // Find SOL balance (native token)
       const solBalance = data.find((balance: any) => 
