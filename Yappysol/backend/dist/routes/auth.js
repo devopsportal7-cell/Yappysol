@@ -170,6 +170,9 @@ router.post('/privy', (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         console.log('Backend: PrivyAuthService result:', result);
         if (result.success) {
             console.log('Backend: Privy authentication successful');
+            // Fetch user wallets for the response
+            const { WalletService } = await Promise.resolve().then(() => __importStar(require('../services/WalletService')));
+            const wallets = await WalletService.getUserWallets(result.user.id);
             res.json({
                 success: true,
                 message: 'Privy authentication successful',
@@ -181,6 +184,7 @@ router.post('/privy', (0, asyncHandler_1.asyncHandler)(async (req, res) => {
                     createdAt: result.user.created_at,
                     solBalance: 0
                 },
+                wallets: wallets || [], // Include wallets array to prevent reduce error
                 token: result.token
             });
         }
