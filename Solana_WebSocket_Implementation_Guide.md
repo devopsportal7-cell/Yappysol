@@ -279,3 +279,4 @@ ws.onmessage = (event) => {
 ---
 
 **🎯 The Solana WebSocket implementation provides native compatibility, better performance, and enhanced reliability for real-time external wallet deposit detection!**
+

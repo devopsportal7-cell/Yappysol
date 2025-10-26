@@ -91,3 +91,4 @@ CREATE INDEX IF NOT EXISTS idx_wallets_is_active ON wallets(is_active);
 
 -- 8. Update existing wallets to have is_active = true
 UPDATE wallets SET is_active = TRUE WHERE is_active IS NULL;
+

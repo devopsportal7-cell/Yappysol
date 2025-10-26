@@ -314,3 +314,4 @@ REACT_APP_WS_URL=wss://your-backend.com:8080/ws  # Production
 ```
 
 This WebSocket integration provides true real-time portfolio updates! 🚀
+

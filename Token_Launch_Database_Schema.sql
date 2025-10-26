@@ -171,3 +171,4 @@ CREATE POLICY "Service role full access token_prices" ON token_prices
 
 CREATE POLICY "Service role full access user_holdings" ON user_token_holdings
   FOR ALL USING (auth.role() = 'service_role');
+

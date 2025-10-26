@@ -575,3 +575,4 @@ const loadSessionFromStorage = () => {
 - Messages are stored with timestamps and can include attachments and actions
 - Multi-step flows preserve state through the `currentStep` and `currentAction` context fields
 - All endpoints require authentication via JWT token
+

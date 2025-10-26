@@ -140,12 +140,18 @@ export class HeliusBalanceService {
       const data = await response.json();
       
       // Handle case where API returns empty or invalid data
-      if (!Array.isArray(data)) {
+      if (!data || typeof data !== 'object') {
         logger.warn('[HELIUS] Invalid token balances response', { data, walletAddress });
         return [];
       }
 
-      return data;
+      // Helius returns { nativeBalance: 62477480, tokens: [...] }
+      // Extract the tokens array
+      if (data.tokens && Array.isArray(data.tokens)) {
+        return data.tokens;
+      }
+
+      return [];
     } catch (error) {
       logger.error('[HELIUS] Error fetching token balances', { error, walletAddress });
       return [];
@@ -173,17 +179,18 @@ export class HeliusBalanceService {
       const data = await response.json();
       
       // Handle case where API returns empty or invalid data
-      if (!Array.isArray(data)) {
+      if (!data || typeof data !== 'object') {
         logger.warn('[HELIUS] Invalid SOL balance response', { data, walletAddress });
         return 0;
       }
       
-      // Find SOL balance (native token)
-      const solBalance = data.find((balance: any) => 
-        balance.mint === 'So11111111111111111111111111111111111111112'
-      );
-
-      return solBalance ? solBalance.uiAmount : 0;
+      // Helius returns { nativeBalance: 62477480, tokens: [...] }
+      // Convert lamports to SOL (lamports / 1e9)
+      if (data.nativeBalance !== undefined) {
+        return data.nativeBalance / 1e9;
+      }
+      
+      return 0;
     } catch (error) {
       logger.error('[HELIUS] Error fetching SOL balance', { error, walletAddress });
       return 0;

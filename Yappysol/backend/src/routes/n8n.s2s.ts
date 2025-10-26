@@ -55,3 +55,4 @@ router.post('/price/quote', asyncHandler(PriceController.quote));
 router.post('/trending/list', asyncHandler(TrendingController.list));
 
 export default router;
+

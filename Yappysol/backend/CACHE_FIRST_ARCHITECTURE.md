@@ -120,3 +120,4 @@ SOLANA_WSS_URL=wss://mainnet.helius-rpc.com/?api-key=...
 ```
 
 This architecture provides the best of both worlds: **instant responses** for users and **minimal API usage** for the system! 🚀
+

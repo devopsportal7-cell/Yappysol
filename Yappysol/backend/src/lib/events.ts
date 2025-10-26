@@ -151,3 +151,4 @@ export function removeAllListeners(): void {
   bus.removeAllListeners('wallet-updated');
   logger.info('[EVENTS] Removed all wallet-updated listeners');
 }
+

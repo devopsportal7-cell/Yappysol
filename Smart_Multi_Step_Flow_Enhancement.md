@@ -217,3 +217,4 @@ Bot: [Detects all entities]
 ```
 
 **The difference is night and day!** 🌟
+

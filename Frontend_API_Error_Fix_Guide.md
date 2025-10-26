@@ -274,3 +274,4 @@ After fixing the API endpoints:
 - ✅ All settings functionality working
 
 The main issue is missing the `/api/user/` prefix in API calls. Once fixed, all the JSON parsing errors should disappear!
+

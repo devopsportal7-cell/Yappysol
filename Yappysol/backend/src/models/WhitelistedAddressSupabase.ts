@@ -149,3 +149,4 @@ export class WhitelistedAddressModel {
     return solanaAddressRegex.test(address);
   }
 }
+

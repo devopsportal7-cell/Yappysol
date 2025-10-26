@@ -390,3 +390,4 @@ const sendMessage = async (message: string) => {
 ```
 
 This ensures proper session management throughout the n8n integration! 🚀
+

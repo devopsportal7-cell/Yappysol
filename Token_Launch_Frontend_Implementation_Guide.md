@@ -654,3 +654,4 @@ const Navigation = () => {
 ✅ **Market Data**: Market cap, volume, liquidity, holders count
 
 This implementation provides a complete token launch tracking system with price monitoring and portfolio integration, giving users full visibility into their token creation activities and performance.
+

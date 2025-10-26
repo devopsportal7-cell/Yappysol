@@ -162,3 +162,4 @@ CREATE TABLE external_transactions (
 **This is the most reliable and efficient approach for detecting external deposits!** 🚀✨
 
 The WebSocket-based detection ensures you only get notified when there are actual transactions, making it both real-time and resource-efficient.
+

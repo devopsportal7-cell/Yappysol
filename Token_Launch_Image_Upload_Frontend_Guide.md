@@ -478,3 +478,4 @@ if (result.error) {
 6. **Loading States**: Show appropriate loading indicators during uploads and processing
 
 This implementation ensures smooth image uploads during the token creation flow while maintaining the multi-step conversation experience.
+

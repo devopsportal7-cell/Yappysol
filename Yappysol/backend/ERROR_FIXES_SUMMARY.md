@@ -91,3 +91,4 @@ To verify the fixes work:
 2. Verify WebSocket connection status in logs
 3. Test background balance updates
 4. Test session management functionality
+

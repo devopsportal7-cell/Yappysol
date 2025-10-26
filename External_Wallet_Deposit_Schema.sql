@@ -160,3 +160,4 @@ COMMENT ON TABLE wallet_balance_cache IS 'Caches total wallet balances for perfo
 COMMENT ON TABLE token_balance_cache IS 'Caches individual token balances for each wallet';
 COMMENT ON TABLE balance_update_events IS 'Tracks balance update events for processing';
 COMMENT ON TABLE platform_wallets IS 'Identifies platform-owned wallets to filter external transactions';
+
