@@ -1,5 +1,4 @@
 import { logger } from '../utils/logger';
-import { externalTransactionService } from '../services/ExternalTransactionService';
 import { heliusBalanceService } from '../services/HeliusBalanceService';
 import { balanceCacheService } from '../services/BalanceCacheService';
 import { TABLES } from '../lib/supabase';
@@ -7,7 +6,7 @@ import { TABLES } from '../lib/supabase';
 export class BackgroundBalanceUpdateService {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
-  private updateIntervalMs = 300000; // 5 minutes (reduced frequency to avoid rate limits)
+  private updateIntervalMs = 1800000; // 30 minutes (increased to avoid rate limits - WebSockets handle real-time updates)
 
   constructor() {
     // Allow configuration via environment variable
@@ -115,25 +114,8 @@ export class BackgroundBalanceUpdateService {
 
       await Promise.all(updatePromises);
 
-      // Check for external transactions after portfolio updates
-      try {
-        logger.info('[BACKGROUND] Checking for external transactions');
-        
-        const notifications = await externalTransactionService.checkAllWalletsForExternalDeposits();
-        
-        if (notifications.length > 0) {
-          logger.info(`[BACKGROUND] Found ${notifications.length} external transaction notifications`);
-          
-          for (const notification of notifications) {
-            await externalTransactionService.storeExternalTransaction(
-              notification.transaction, 
-              notification.userId
-            );
-          }
-        }
-      } catch (error) {
-        logger.error('[BACKGROUND] Error checking external transactions:', error);
-      }
+      // Note: External transactions are now handled by WebSocket subscribers for real-time updates
+      // No need to poll for external transactions here to avoid rate limits
 
       const duration = Date.now() - startTime;
       logger.info(`[BACKGROUND] Batch update completed`, {
@@ -142,7 +124,7 @@ export class BackgroundBalanceUpdateService {
         successCount,
         errorCount,
         portfoliosUpdated: portfolios.size,
-        externalTransactionsFound: 0 // This would be updated by the external transaction check
+        externalTransactionsFound: 0 // External transactions handled by WebSockets
       });
 
     } catch (error) {
