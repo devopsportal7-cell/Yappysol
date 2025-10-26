@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -718,17 +751,47 @@ Be enthusiastic about the Solana ecosystem!`;
                             console.log('[chatWithOpenAI] AI-routed to: portfolio service');
                             const walletAddress = context.walletAddress || (context.user && context.user.walletAddress);
                             if (!walletAddress) {
-                                return { prompt: 'Please connect your wallet to view your portfolio.' };
+                                return {
+                                    prompt: 'Please connect your wallet to view your portfolio.',
+                                    action: 'portfolio',
+                                    actionData: { requiresWallet: true }
+                                };
                             }
                             try {
-                                const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
-                                return { prompt: portfolioMsg };
+                                // Fetch portfolio data from cache
+                                const { balanceCacheService } = await Promise.resolve().then(() => __importStar(require('../services/BalanceCacheService')));
+                                const portfolio = await balanceCacheService.getFromCache(walletAddress);
+                                if (portfolio && portfolio.totalUsdValue > 0) {
+                                    const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
+                                    return {
+                                        prompt: portfolioMsg,
+                                        action: 'portfolio',
+                                        actionData: portfolio,
+                                        // Store portfolio state for follow-up questions
+                                        entities: {
+                                            walletAddress,
+                                            portfolioData: portfolio,
+                                            tokens: portfolio.tokens || []
+                                        }
+                                    };
+                                }
+                                else {
+                                    return {
+                                        prompt: 'Your portfolio is currently empty or refreshing. Please check back in a moment.',
+                                        action: 'portfolio',
+                                        actionData: { isEmpty: true },
+                                        entities: { walletAddress }
+                                    };
+                                }
                             }
                             catch (error) {
                                 console.error('[chatWithOpenAI] Error in AI-routed portfolio:', error);
-                                // Fall through to keyword matching
+                                return {
+                                    prompt: 'I encountered an error fetching your portfolio. Please try again.',
+                                    action: 'portfolio',
+                                    actionData: { error: true }
+                                };
                             }
-                            break;
                         }
                         case 'trending': {
                             console.log('[chatWithOpenAI] AI-routed to: trending service');
@@ -738,7 +801,20 @@ Be enthusiastic about the Solana ecosystem!`;
                                 return {
                                     prompt: trendingPrompt,
                                     action: 'trending',
-                                    flowType: 'trending'
+                                    flowType: 'trending',
+                                    // Store trending tokens for follow-up questions
+                                    entities: {
+                                        trendingTokens,
+                                        tokenCount: trendingTokens.length,
+                                        tokens: trendingTokens.map((t) => ({
+                                            symbol: t.symbol,
+                                            name: t.name,
+                                            price: t.priceUsd,
+                                            change24h: t.priceChange?.h24,
+                                            address: t.address,
+                                            mint: t.address
+                                        }))
+                                    }
                                 };
                             }
                             catch (error) {
@@ -859,7 +935,20 @@ Be enthusiastic about the Solana ecosystem!`;
                         prompt: conversationalResponse,
                         action: 'trending',
                         flowType: 'trending',
-                        tokens: trendingTokens // Include raw data for frontend
+                        tokens: trendingTokens, // Include raw data for frontend
+                        // Store trending tokens for follow-up questions
+                        entities: {
+                            trendingTokens,
+                            tokenCount: trendingTokens.length,
+                            tokens: trendingTokens.map((t) => ({
+                                symbol: t.symbol,
+                                name: t.name,
+                                price: t.priceUsd,
+                                change24h: t.priceChange?.h24,
+                                address: t.address,
+                                mint: t.address
+                            }))
+                        }
                     };
                 }
                 catch (error) {

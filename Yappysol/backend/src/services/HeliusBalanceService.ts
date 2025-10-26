@@ -236,10 +236,35 @@ export class HeliusBalanceService {
 
   /**
    * Get SOL price in USD
+   * Tries multiple sources: Binance (primary) -> CoinGecko -> Helius fallback
    */
   private async getSolPrice(): Promise<number> {
+    // Try Binance first (no rate limits, fast, reliable)
     try {
-      // Use CoinGecko API for SOL price
+      const binanceResponse = await fetch(
+        'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT',
+        {
+          headers: {
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (binanceResponse.ok) {
+        const data = await binanceResponse.json();
+        const price = parseFloat(data.price);
+        
+        if (price && price > 0) {
+          logger.info('[HELIUS] SOL price fetched from Binance', { price });
+          return price;
+        }
+      }
+    } catch (error) {
+      logger.warn('[HELIUS] Binance API failed, trying CoinGecko', { error });
+    }
+
+    // Fallback to CoinGecko
+    try {
       const response = await fetch(
         'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
         {
@@ -249,28 +274,22 @@ export class HeliusBalanceService {
         }
       );
 
-      if (!response.ok) {
-        logger.warn('[HELIUS] Error fetching SOL price from CoinGecko, using market price fallback', {
-          status: response.status,
-          statusText: response.statusText
-        });
-        return 194; // Fallback to approximate current market price
-      }
-
-      const data = await response.json();
-      const price = data.solana?.usd;
-      
-      if (price && price > 0) {
-        logger.info('[HELIUS] SOL price fetched successfully', { price });
-        return price;
-      } else {
-        logger.warn('[HELIUS] Invalid SOL price from CoinGecko, using fallback');
-        return 194; // Fallback to approximate current market price
+      if (response.ok) {
+        const data = await response.json();
+        const price = data.solana?.usd;
+        
+        if (price && price > 0) {
+          logger.info('[HELIUS] SOL price fetched from CoinGecko', { price });
+          return price;
+        }
       }
     } catch (error) {
-      logger.error('[HELIUS] Error getting SOL price', { error });
-      return 194; // Fallback to approximate current market price
+      logger.warn('[HELIUS] CoinGecko API failed', { error });
     }
+
+    // Final fallback to approximate market price
+    logger.warn('[HELIUS] All price APIs failed, using market price fallback');
+    return 194; // Fallback to approximate current market price
   }
 
   /**

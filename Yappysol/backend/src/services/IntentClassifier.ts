@@ -54,27 +54,37 @@ export class IntentClassifier {
       model: 'gpt-4o-mini',
       messages: [{
         role: 'system',
-        content: `You are an intent classifier for Yappysol, a Solana DeFi chatbot. Analyze user messages and classify them.
+        content: `You are an intent classifier for Yappysol, a Solana DeFi chatbot. Analyze user messages SEMANTICALLY - understand MEANING, not just keywords.
 
-CRITICAL: Distinguish between ACTIONABLE vs QUESTION intents:
+CRITICAL: Use semantic understanding, not keyword matching!
 
 ACTIONABLE INTENTS (isActionable: true):
 - User wants to DO something NOW
 - Imperative commands or direct requests
-- Examples: "swap SOL for USDC", "create a token called MyCoin", "show my portfolio", "launch SuperToken"
+- Examples: "swap SOL for USDC", "create a token called MyCoin", "what's in my wallet", "launch SuperToken"
 
 QUESTION INTENTS (isActionable: false):
 - User is asking HOW/WHAT/WHY about something
 - Educational or informational queries
 - Examples: "how do I swap tokens?", "what is token launching?", "can you explain swapping?"
 
-INTENTS:
-- swap: Token trading, exchange, convert, buy/sell operations
-- launch: Token creation, minting, deployment
-- price: Price queries, market data
-- portfolio: Portfolio, holdings, balance queries
-- trending: Trending tokens, hot tokens, market trends
+INTENTS (understand SEMANTICALLY, not just keywords):
+- swap: User wants to trade/exchange tokens (any phrasing: "swap", "convert", "trade", "exchange")
+- launch: User wants to create/mint a token (any phrasing: "launch", "create", "make token", "mint")
+- price: User asking about token price/market data
+- portfolio: User asking about THEIR OWN tokens/balance/holdings (variations: "my tokens", "what I have", "my balance", "portfolio", "holdings", "everything I own", "what's in my wallet")
+- trending: User asking about trending/popular tokens
 - general: General questions, help, greetings
+
+PORTFOLIO INTENT EXAMPLES (understand all of these):
+- "what is my current portfolio"
+- "what tokens do i own"
+- "everything i have"
+- "what's in my wallet"
+- "show me what i own"
+- "my balance"
+- "my holdings"
+- Any question about user's personal tokens/balance
 
 ENTITY EXTRACTION:
 For swap: fromToken, toToken, amount, slippage
@@ -83,7 +93,7 @@ For price: tokenSymbol, timeframe
 For portfolio: timeframe
 For trending: timeframe, limit
 
-IMPORTANT: Be conservative with confidence scores. Only return high confidence (0.8+) for clear cases.
+IMPORTANT: Use SEMANTIC understanding. Don't rely on exact keywords. Understand user intent.
 
 Return ONLY valid JSON, no markdown:
 {
@@ -159,15 +169,32 @@ Return ONLY valid JSON, no markdown:
       };
     }
 
-    // Portfolio intent
-    const portfolioKeywords = ['portfolio', 'holdings', 'balance', 'my tokens', 'what do i own'];
-    if (portfolioKeywords.some(kw => lowerMessage.includes(kw))) {
+    // Portfolio intent - AI-powered detection (flexible matching)
+    // Match patterns like: "what's in my...", "what do I own...", "show me my..."
+    const portfolioPatterns = [
+      /(portfolio|holdings|balance|assets|tokens|coins)/,
+      /(what's in my|what do i own|what do i have|my.*tokens|my.*coins)/,
+      /(show me my|display my|get my|see my)/,
+      /(how much|how many).*(do i have|i own|is in).*wallet/,
+      /(list|show|display).*(my tokens|my coins|my portfolio|my assets)/
+    ];
+    
+    const hasPortfolioPattern = portfolioPatterns.some(pattern => pattern.test(lowerMessage));
+    
+    // Additional semantic checks for portfolio-related queries
+    const portfolioSemantic = 
+      (lowerMessage.includes('wallet') && (lowerMessage.includes('content') || lowerMessage.includes('contains'))) ||
+      (lowerMessage.includes('account') && (lowerMessage.includes('balance') || lowerMessage.includes('value'))) ||
+      (lowerMessage.includes('current') && (lowerMessage.includes('portfolio') || lowerMessage.includes('balance'))) ||
+      (lowerMessage.includes('everything') && lowerMessage.includes('own'));
+    
+    if (hasPortfolioPattern || portfolioSemantic) {
       const intent = 'portfolio';
       return {
         intent,
-        confidence: 0.8,
+        confidence: 0.9, // High confidence for portfolio queries
         entities: {},
-        isActionable: this.determineActionability(message, intent)
+        isActionable: true // Portfolio queries are always actionable
       };
     }
 

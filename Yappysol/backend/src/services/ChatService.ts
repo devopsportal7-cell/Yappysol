@@ -757,16 +757,46 @@ Be enthusiastic about the Solana ecosystem!`;
             console.log('[chatWithOpenAI] AI-routed to: portfolio service');
             const walletAddress = context.walletAddress || (context.user && context.user.walletAddress);
             if (!walletAddress) {
-              return { prompt: 'Please connect your wallet to view your portfolio.' };
+              return { 
+                prompt: 'Please connect your wallet to view your portfolio.',
+                action: 'portfolio',
+                actionData: { requiresWallet: true }
+              };
             }
             try {
-              const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
-              return { prompt: portfolioMsg };
+              // Fetch portfolio data from cache
+              const { balanceCacheService } = await import('../services/BalanceCacheService');
+              const portfolio = await balanceCacheService.getFromCache(walletAddress);
+              
+              if (portfolio && portfolio.totalUsdValue > 0) {
+                const portfolioMsg = await this.userPortfolioService.formatPortfolioForChat(walletAddress);
+                return { 
+                  prompt: portfolioMsg,
+                  action: 'portfolio',
+                  actionData: portfolio,
+                  // Store portfolio state for follow-up questions
+                  entities: {
+                    walletAddress,
+                    portfolioData: portfolio,
+                    tokens: portfolio.tokens || []
+                  }
+                };
+              } else {
+                return { 
+                  prompt: 'Your portfolio is currently empty or refreshing. Please check back in a moment.',
+                  action: 'portfolio',
+                  actionData: { isEmpty: true },
+                  entities: { walletAddress }
+                };
+              }
             } catch (error) {
               console.error('[chatWithOpenAI] Error in AI-routed portfolio:', error);
-              // Fall through to keyword matching
+              return { 
+                prompt: 'I encountered an error fetching your portfolio. Please try again.',
+                action: 'portfolio',
+                actionData: { error: true }
+              };
             }
-            break;
           }
 
           case 'trending': {
@@ -777,7 +807,20 @@ Be enthusiastic about the Solana ecosystem!`;
               return { 
                 prompt: trendingPrompt,
                 action: 'trending',
-                flowType: 'trending'
+                flowType: 'trending',
+                // Store trending tokens for follow-up questions
+                entities: {
+                  trendingTokens,
+                  tokenCount: trendingTokens.length,
+                  tokens: trendingTokens.map((t: any) => ({
+                    symbol: t.symbol,
+                    name: t.name,
+                    price: t.priceUsd,
+                    change24h: t.priceChange?.h24,
+                    address: t.address,
+                    mint: t.address
+                  }))
+                }
               };
             } catch (error) {
               console.error('[chatWithOpenAI] Error in AI-routed trending:', error);
@@ -899,7 +942,20 @@ Be enthusiastic about the Solana ecosystem!`;
           prompt: conversationalResponse,
           action: 'trending',
           flowType: 'trending',
-          tokens: trendingTokens // Include raw data for frontend
+          tokens: trendingTokens, // Include raw data for frontend
+          // Store trending tokens for follow-up questions
+          entities: {
+            trendingTokens,
+            tokenCount: trendingTokens.length,
+            tokens: trendingTokens.map((t: any) => ({
+              symbol: t.symbol,
+              name: t.name,
+              price: t.priceUsd,
+              change24h: t.priceChange?.h24,
+              address: t.address,
+              mint: t.address
+            }))
+          }
         };
       } catch (error) {
         console.error('Error handling trending intent:', error);
