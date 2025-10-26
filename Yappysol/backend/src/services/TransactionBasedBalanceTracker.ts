@@ -34,7 +34,7 @@ export class TransactionBasedBalanceTracker {
         walletAddress,
         totalUsdValue: blockchainPortfolio.totalUsdValue,
         tokenCount: blockchainPortfolio.tokens.length,
-        tokens: blockchainPortfolio.tokens.map(t => ({ symbol: t.symbol, amount: t.uiAmount }))
+        tokens: blockchainPortfolio.tokens.map((t: any) => ({ symbol: t.symbol, amount: t.uiAmount }))
       });
 
     } catch (error) {

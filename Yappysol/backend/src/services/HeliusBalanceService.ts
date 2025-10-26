@@ -316,4 +316,4 @@ export class HeliusBalanceService {
   }
 }
 
-export const heliusBalanceService = new HeliusBalanceService();
+export const heliusBalanceService = new HeliusBalanceService(); 
