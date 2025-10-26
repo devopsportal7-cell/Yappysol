@@ -113,14 +113,35 @@ router.get('/wallets', authMiddleware, asyncHandler(async (req, res) => {
   const wallets = await AuthService.getUserWallets(userId);
   console.log('[AUTH] getUserWallets result:', JSON.stringify(wallets, null, 2));
   
-  res.json({
-    wallets: wallets.map(wallet => ({
-      id: wallet.id,
-      publicKey: wallet.publicKey,
-      isImported: wallet.isImported,
-      balance: wallet.balance
-    }))
-  });
+  // Get portfolio data from cache and include in response
+  const { balanceCacheService } = await import('../services/BalanceCacheService');
+  const walletsWithPortfolio = await Promise.all(wallets.map(async (wallet) => {
+    const portfolio = await balanceCacheService.getFromCache(wallet.publicKey);
+    
+    // Emit WebSocket update if portfolio exists
+    if (portfolio) {
+      const { frontendWebSocketServer } = await import('../services/FrontendWebSocketServer');
+      frontendWebSocketServer.emitWalletUpdate(wallet.publicKey, portfolio);
+      
+      return {
+        id: wallet.id,
+        publicKey: wallet.publicKey,
+        isImported: wallet.isImported,
+        balance: wallet.balance, // SOL balance
+        portfolio: portfolio // Include full portfolio with USD equivalent
+      };
+    } else {
+      // No portfolio cached yet, return basic wallet info
+      return {
+        id: wallet.id,
+        publicKey: wallet.publicKey,
+        isImported: wallet.isImported,
+        balance: wallet.balance
+      };
+    }
+  }));
+  
+  res.json({ wallets: walletsWithPortfolio });
 }));
 
 // Get user API keys
