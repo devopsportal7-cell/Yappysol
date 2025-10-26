@@ -191,9 +191,9 @@ export class HeliusBalanceService {
   }
 
   /**
-   * Get token price from Helius
+   * Get token price from Helius (public method)
    */
-  private async getTokenPrice(tokenMint: string): Promise<number> {
+  async getTokenPrice(tokenMint: string): Promise<number> {
     try {
       // Use a simple price service - you might want to implement a more sophisticated one
       const response = await fetch(

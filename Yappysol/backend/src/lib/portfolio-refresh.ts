@@ -60,7 +60,11 @@ export async function refreshNow(wallet: string) {
           portfolio.tokens.map(t => t.mint)
         );
         
-        // Emit SSE event for frontend
+        // Notify frontend WebSocket clients
+        const { frontendWebSocketServer } = await import('../services/FrontendWebSocketServer');
+        frontendWebSocketServer.emitWalletUpdate(wallet, portfolio);
+        
+        // Emit SSE event for frontend (legacy)
         const { emitWalletUpdated } = await import('./events');
         emitWalletUpdated(wallet, 'cache_update', { 
           totalSolValue: portfolio.totalSolValue, 

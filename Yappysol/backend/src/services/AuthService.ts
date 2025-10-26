@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { UserModel, User, CreateUserData, LoginData, UserWithWallets } from '../models/UserSupabase';
+import { UserModel, User, CreateUserData, LoginData } from '../models/UserSupabase';
 import { WalletModel, CreateWalletData, ImportWalletData } from '../models/WalletSupabase';
 import { ApiKeyModel, CreateApiKeyData } from '../models/ApiKeySupabase';
 import { UserSessionModel } from '../models/UserSessionSupabase';
@@ -8,7 +8,7 @@ import { PrivyAuthService } from './PrivyAuthService';
 
 export interface AuthResult {
   success: boolean;
-  user?: UserWithWallets;
+  user?: User;
   token?: string;
   error?: string;
 }
@@ -120,32 +120,9 @@ export class AuthService {
         // Don't fail authentication if session creation fails
       }
 
-      // Get user wallets and portfolio data
-      let wallets: any[] = [];
-      let portfolio: any = null;
-      
-      try {
-        // Get user wallets with balances
-        wallets = await WalletService.getUserWallets(user.id);
-        
-        // Get portfolio data for the first wallet (if available)
-        if (wallets.length > 0) {
-          const { UserPortfolioService } = await import('./UserPortfolioService');
-          const portfolioService = new UserPortfolioService();
-          portfolio = await portfolioService.getUserPortfolioWithMetadata(wallets[0].publicKey);
-        }
-      } catch (error) {
-        console.error('Error fetching wallet/portfolio data during login:', error);
-        // Don't fail login if portfolio fetch fails
-      }
-
       return {
         success: true,
-        user: {
-          ...user,
-          wallets,
-          portfolio
-        },
+        user,
         token
       };
     } catch (error) {

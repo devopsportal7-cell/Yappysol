@@ -7,7 +7,7 @@ import { TABLES } from '../lib/supabase';
 export class BackgroundBalanceUpdateService {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
-  private updateIntervalMs = 30000; // 30 seconds
+  private updateIntervalMs = 300000; // 5 minutes (reduced frequency to avoid rate limits)
 
   constructor() {
     // Allow configuration via environment variable

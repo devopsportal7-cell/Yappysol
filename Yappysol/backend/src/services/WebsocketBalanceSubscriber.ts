@@ -138,9 +138,22 @@ export class WebsocketBalanceSubscriber {
         // Check for external transactions when account changes
         await this.checkForExternalTransactions(walletAddress, notificationReceivedTimestamp);
         
-        // Also trigger balance refresh
+        // Trigger immediate balance refresh from Helius and update cache
         const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
         requestWalletRefresh(walletAddress, true); // Immediate refresh
+        
+        // Notify frontend WebSocket clients
+        const { frontendWebSocketServer } = await import('./FrontendWebSocketServer');
+        frontendWebSocketServer.emitBalanceUpdate(walletAddress, {
+          reason: 'account_change',
+          slot: accountInfo.context?.slot,
+          lamports: accountInfo.value?.lamports
+        });
+        
+        logger.info('[WSS] Account change detected, refreshing balance cache', { 
+          walletAddress, 
+          subscriptionId 
+        });
         
       } else if (message.method === 'logsNotification') {
         // Handle transaction logs notifications
