@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -21,34 +54,23 @@ router.get('/:walletAddress', async (req, res) => {
                 tokenCount: cachedPortfolio.tokens.length,
                 totalUsdValue: cachedPortfolio.totalUsdValue
             });
+            // Send cached portfolio to frontend WebSocket clients
+            const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
+            frontendWebSocketServer.emitWalletUpdate(walletAddress, cachedPortfolio);
             return res.json(cachedPortfolio);
         }
-        // If no cache, fetch fresh data (this should rarely happen)
-        logger_1.logger.warn('[Portfolio Route] No cached data found, fetching fresh', { walletAddress });
-        const tokens = await portfolioService.getUserPortfolioWithMetadata(walletAddress);
+        // If no cache, fetch fresh data using HeliusBalanceService (with USD conversion fix)
+        logger_1.logger.warn('[Portfolio Route] No cached data found, fetching fresh from Helius', { walletAddress });
+        const { heliusBalanceService } = await Promise.resolve().then(() => __importStar(require('../services/HeliusBalanceService')));
+        const portfolio = await heliusBalanceService.getWalletPortfolio(walletAddress);
         // Cache the fresh data for future requests
-        const portfolio = {
-            totalSolValue: tokens.reduce((sum, token) => sum + (token.balanceUsd || 0) / 100, 0), // Rough SOL conversion
-            totalUsdValue: tokens.reduce((sum, token) => sum + (token.balanceUsd || 0), 0),
-            tokens: tokens.map(token => ({
-                mint: token.mint,
-                symbol: token.symbol,
-                name: token.symbol, // Use symbol as name fallback
-                accountUnit: token.mint,
-                uiAmount: token.balance,
-                priceUsd: token.price,
-                solEquivalent: (token.balanceUsd || 0) / 100, // Rough SOL conversion
-                usdEquivalent: token.balanceUsd || 0,
-                image: token.image,
-                solscanUrl: token.solscanUrl,
-                decimals: 9 // Default decimals
-            }))
-        };
-        // Cache the portfolio
         await BalanceCacheService_1.balanceCacheService.updateCache(walletAddress, portfolio);
+        // Send fresh portfolio to frontend WebSocket clients
+        const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
+        frontendWebSocketServer.emitWalletUpdate(walletAddress, portfolio);
         logger_1.logger.info('[Portfolio Route] Fresh portfolio fetched and cached', {
             walletAddress,
-            tokenCount: tokens.length
+            tokenCount: portfolio.tokens.length
         });
         res.json(portfolio);
     }

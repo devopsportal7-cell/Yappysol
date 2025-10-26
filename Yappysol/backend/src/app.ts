@@ -30,7 +30,7 @@ moralisService.initialize().catch(error => {
 app.use(express.json());
 
 // CORS configuration to support multiple origins
-const corsOrigins = process.env.FRONTEND_BASE_URL?.split(',') || ['http://localhost:3000'];
+const corsOrigins = process.env.FRONTEND_BASE_URL?.split(',').map(url => url.trim()) || ['http://localhost:3000'];
 console.log('CORS Origins configured:', corsOrigins);
 
 app.use(cors({

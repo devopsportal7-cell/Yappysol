@@ -20,38 +20,29 @@ router.get('/:walletAddress', async (req, res) => {
         tokenCount: cachedPortfolio.tokens.length,
         totalUsdValue: cachedPortfolio.totalUsdValue 
       });
+      
+      // Send cached portfolio to frontend WebSocket clients
+      const { frontendWebSocketServer } = await import('../services/FrontendWebSocketServer');
+      frontendWebSocketServer.emitWalletUpdate(walletAddress, cachedPortfolio);
+      
       return res.json(cachedPortfolio);
     }
 
-    // If no cache, fetch fresh data (this should rarely happen)
-    logger.warn('[Portfolio Route] No cached data found, fetching fresh', { walletAddress });
-    const tokens = await portfolioService.getUserPortfolioWithMetadata(walletAddress);
-    
-    // Cache the fresh data for future requests
-    const portfolio = {
-      totalSolValue: tokens.reduce((sum, token) => sum + (token.balanceUsd || 0) / 100, 0), // Rough SOL conversion
-      totalUsdValue: tokens.reduce((sum, token) => sum + (token.balanceUsd || 0), 0),
-      tokens: tokens.map(token => ({
-        mint: token.mint,
-        symbol: token.symbol,
-        name: token.symbol, // Use symbol as name fallback
-        accountUnit: token.mint,
-        uiAmount: token.balance,
-        priceUsd: token.price,
-        solEquivalent: (token.balanceUsd || 0) / 100, // Rough SOL conversion
-        usdEquivalent: token.balanceUsd || 0,
-        image: token.image,
-        solscanUrl: token.solscanUrl,
-        decimals: 9 // Default decimals
-      }))
-    };
+    // If no cache, fetch fresh data using HeliusBalanceService (with USD conversion fix)
+    logger.warn('[Portfolio Route] No cached data found, fetching fresh from Helius', { walletAddress });
+    const { heliusBalanceService } = await import('../services/HeliusBalanceService');
+    const portfolio = await heliusBalanceService.getWalletPortfolio(walletAddress);
 
-    // Cache the portfolio
+    // Cache the fresh data for future requests
     await balanceCacheService.updateCache(walletAddress, portfolio);
+    
+    // Send fresh portfolio to frontend WebSocket clients
+    const { frontendWebSocketServer } = await import('../services/FrontendWebSocketServer');
+    frontendWebSocketServer.emitWalletUpdate(walletAddress, portfolio);
     
     logger.info('[Portfolio Route] Fresh portfolio fetched and cached', { 
       walletAddress, 
-      tokenCount: tokens.length 
+      tokenCount: portfolio.tokens.length 
     });
     
     res.json(portfolio);
