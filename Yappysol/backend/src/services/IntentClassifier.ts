@@ -62,20 +62,25 @@ ACTIONABLE INTENTS (isActionable: true):
 - User wants to DO something NOW or GET their data
 - Imperative commands or direct requests
 - Examples: "swap SOL for USDC", "create a token called MyCoin", "what's in my wallet", "launch SuperToken"
+- PRICE queries are ACTIONABLE: "how much is solana", "what's the price of SOL", "price of USDC"
 
 QUESTION INTENTS (isActionable: false):
-- User is asking HOW/WHAT/WHY about GENERAL concepts (not their personal data)
+- User is asking HOW/WHAT/WHY about GENERAL concepts (not their personal data or current prices)
 - Educational or informational queries about concepts
 - Examples: "how do I swap tokens?", "what is token launching?", "can you explain swapping?"
 
-SMART DISTINCTION - "What is my..." questions:
+SMART DISTINCTION - "What is my..." and Price queries:
 - "what is my portfolio" → PORTFOLIO intent (actionable: true) - User wants THEIR data
 - "what is my balance" → PORTFOLIO intent (actionable: true) - User wants THEIR data
+- "how much is solana" → PRICE intent (actionable: true) - User wants CURRENT price data
+- "what's the price of SOL" → PRICE intent (actionable: true) - User wants CURRENT price data
 - "what is a token launch" → GENERAL intent (actionable: false) - User asking about a concept
 - "what is swapping" → GENERAL intent (actionable: false) - User asking about a concept
 
-RULE: If "what is" + "my" → Always actionable (user wants their data)
-      If "what is" + NO "my" → Usually general question about concepts
+RULE: 
+- If "what is" + "my" → Always actionable (user wants their data)
+- If price-related + token name → Always actionable (user wants current price)
+- If "what is" + NO "my" + NO token name → Usually general question about concepts
 
 INTENTS (understand SEMANTICALLY, not just keywords):
 - swap: User wants to trade/exchange tokens (any phrasing: "swap", "convert", "trade", "exchange")
@@ -95,6 +100,15 @@ PORTFOLIO INTENT EXAMPLES (understand all of these):
 - "my holdings" → PORTFOLIO, actionable: true
 - "what are my assets" → PORTFOLIO, actionable: true
 - Any question about user's personal tokens/balance
+
+PRICE INTENT EXAMPLES (understand all of these):
+- "how much is solana right now" → PRICE, actionable: true
+- "what's the price of SOL" → PRICE, actionable: true
+- "how much is BONK" → PRICE, actionable: true
+- "price of USDC" → PRICE, actionable: true
+- "what is BONK worth" → PRICE, actionable: true
+- "how much does SOL cost" → PRICE, actionable: true
+- Any question asking for CURRENT price of a token
 
 ENTITY EXTRACTION:
 For swap: fromToken, toToken, amount, slippage
@@ -167,15 +181,38 @@ Return ONLY valid JSON, no markdown:
       };
     }
 
-    // Price intent
-    const priceKeywords = ['price', 'cost', 'value', 'worth', 'how much'];
-    if (priceKeywords.some(kw => lowerMessage.includes(kw))) {
+    // Price intent - Flexible pattern matching for various phrases
+    const pricePatterns = [
+      // Direct price queries
+      /(price|cost|worth|value) (of|for)/,
+      // "how much" queries
+      /how much (is|does|are)/,
+      // "what's the price"
+      /(what's|what is|what's the) (price|cost|worth)/,
+      // Token name patterns (SOL, BTC, BONK, etc)
+      /\b(SOL|BTC|ETH|BONK|WIF|JUP|USDC|USDT|JTO|PYTH|RAY|SAMO)\b.*\b(price|cost|worth|value|now)\b/,
+      /\b(price|cost|worth|value|now)\b.*\b(SOL|BTC|ETH|BONK|WIF|JUP|USDC|USDT|JTO|PYTH|RAY|SAMO)\b/,
+      // "how much is X" where X is a token
+      /how much is \w+/,
+      // "what is X worth" where X is a token
+      /what is \w+ worth/,
+    ];
+    
+    const hasPricePattern = pricePatterns.some(pattern => pattern.test(lowerMessage));
+    const hasPriceKeyword = lowerMessage.includes('price') || 
+                           lowerMessage.includes('cost') || 
+                           lowerMessage.includes('worth') || 
+                           lowerMessage.includes('how much') ||
+                           lowerMessage.includes('trading at');
+    
+    if (hasPricePattern || hasPriceKeyword) {
+      console.log('[IntentClassifier] ✅ Price intent detected via keyword fallback!');
       const intent = 'price';
       return {
         intent,
-        confidence: 0.8,
+        confidence: 0.9, // High confidence for price queries
         entities: this.extractPriceEntities(message),
-        isActionable: this.determineActionability(message, intent)
+        isActionable: true // Price queries are always actionable
       };
     }
 
@@ -256,8 +293,13 @@ Return ONLY valid JSON, no markdown:
     const isImperative = imperativePatterns.some(pattern => pattern.test(lowerMessage));
     
     // Special cases for specific intents
-    if (intent === 'price' || intent === 'trending') {
-      // Price and trending queries are usually informational, not actionable
+    if (intent === 'price') {
+      // Price queries are ALWAYS actionable - user wants current price data
+      return true;
+    }
+    
+    if (intent === 'trending') {
+      // Trending queries are usually informational, not actionable
       return !isQuestion && isImperative;
     }
     
