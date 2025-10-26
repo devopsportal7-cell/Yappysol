@@ -57,9 +57,12 @@ export class HeliusBalanceService {
       // Get SOL balance
       const solBalance = await this.getSolBalance(walletAddress);
       
+      // Get SOL price for USD conversion
+      const solPrice = await this.getSolPrice();
+      
       // Calculate totals
       let totalSolValue = solBalance;
-      let totalUsdValue = 0;
+      let totalUsdValue = solBalance * solPrice; // Convert SOL to USD
 
       const processedTokens = [];
 
@@ -75,10 +78,9 @@ export class HeliusBalanceService {
 
       for (const token of tokenBalances) {
         const priceUsd = await this.getTokenPrice(token.mint);
-        const solPrice = await this.getSolPrice();
         
         const usdEquivalent = token.uiAmount * priceUsd;
-        const solEquivalent = usdEquivalent / solPrice;
+        const solEquivalent = usdEquivalent / solPrice; // Use already-fetched solPrice
 
         totalSolValue += solEquivalent;
         totalUsdValue += usdEquivalent;
