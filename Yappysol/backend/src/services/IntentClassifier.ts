@@ -59,14 +59,23 @@ export class IntentClassifier {
 CRITICAL: Use semantic understanding, not keyword matching!
 
 ACTIONABLE INTENTS (isActionable: true):
-- User wants to DO something NOW
+- User wants to DO something NOW or GET their data
 - Imperative commands or direct requests
 - Examples: "swap SOL for USDC", "create a token called MyCoin", "what's in my wallet", "launch SuperToken"
 
 QUESTION INTENTS (isActionable: false):
-- User is asking HOW/WHAT/WHY about something
-- Educational or informational queries
+- User is asking HOW/WHAT/WHY about GENERAL concepts (not their personal data)
+- Educational or informational queries about concepts
 - Examples: "how do I swap tokens?", "what is token launching?", "can you explain swapping?"
+
+SMART DISTINCTION - "What is my..." questions:
+- "what is my portfolio" → PORTFOLIO intent (actionable: true) - User wants THEIR data
+- "what is my balance" → PORTFOLIO intent (actionable: true) - User wants THEIR data
+- "what is a token launch" → GENERAL intent (actionable: false) - User asking about a concept
+- "what is swapping" → GENERAL intent (actionable: false) - User asking about a concept
+
+RULE: If "what is" + "my" → Always actionable (user wants their data)
+      If "what is" + NO "my" → Usually general question about concepts
 
 INTENTS (understand SEMANTICALLY, not just keywords):
 - swap: User wants to trade/exchange tokens (any phrasing: "swap", "convert", "trade", "exchange")
@@ -77,13 +86,14 @@ INTENTS (understand SEMANTICALLY, not just keywords):
 - general: General questions, help, greetings
 
 PORTFOLIO INTENT EXAMPLES (understand all of these):
-- "what is my current portfolio"
-- "what tokens do i own"
-- "everything i have"
-- "what's in my wallet"
-- "show me what i own"
-- "my balance"
-- "my holdings"
+- "what is my current portfolio" → PORTFOLIO, actionable: true (user wants THEIR data)
+- "what tokens do i own" → PORTFOLIO, actionable: true
+- "everything i have" → PORTFOLIO, actionable: true
+- "what's in my wallet" → PORTFOLIO, actionable: true
+- "show me what i own" → PORTFOLIO, actionable: true
+- "my balance" → PORTFOLIO, actionable: true
+- "my holdings" → PORTFOLIO, actionable: true
+- "what are my assets" → PORTFOLIO, actionable: true
 - Any question about user's personal tokens/balance
 
 ENTITY EXTRACTION:
@@ -174,6 +184,7 @@ Return ONLY valid JSON, no markdown:
     const portfolioPatterns = [
       /(portfolio|holdings|balance|assets|tokens|coins)/,
       /(what's in my|what do i own|what do i have|my.*tokens|my.*coins)/,
+      /(what is my|what are my|what's my)/,  // "what is my current portfolio"
       /(show me my|display my|get my|see my)/,
       /(how much|how many).*(do i have|i own|is in).*wallet/,
       /(list|show|display).*(my tokens|my coins|my portfolio|my assets)/
@@ -189,6 +200,7 @@ Return ONLY valid JSON, no markdown:
       (lowerMessage.includes('everything') && lowerMessage.includes('own'));
     
     if (hasPortfolioPattern || portfolioSemantic) {
+      console.log('[IntentClassifier] ✅ Portfolio intent detected via keyword fallback!');
       const intent = 'portfolio';
       return {
         intent,

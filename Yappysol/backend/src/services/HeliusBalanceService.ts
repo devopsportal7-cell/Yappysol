@@ -257,10 +257,17 @@ export class HeliusBalanceService {
         if (price && price > 0) {
           logger.info('[HELIUS] SOL price fetched from Binance', { price });
           return price;
+        } else {
+          logger.warn('[HELIUS] Binance returned invalid price', { data });
         }
+      } else {
+        logger.warn('[HELIUS] Binance API error', { 
+          status: binanceResponse.status, 
+          statusText: binanceResponse.statusText 
+        });
       }
     } catch (error) {
-      logger.warn('[HELIUS] Binance API failed, trying CoinGecko', { error });
+      logger.warn('[HELIUS] Binance API failed, trying CoinGecko', { error: error instanceof Error ? error.message : error });
     }
 
     // Fallback to CoinGecko
@@ -281,14 +288,21 @@ export class HeliusBalanceService {
         if (price && price > 0) {
           logger.info('[HELIUS] SOL price fetched from CoinGecko', { price });
           return price;
+        } else {
+          logger.warn('[HELIUS] CoinGecko returned invalid price', { data });
         }
+      } else {
+        logger.warn('[HELIUS] CoinGecko API error', { 
+          status: response.status, 
+          statusText: response.statusText 
+        });
       }
     } catch (error) {
-      logger.warn('[HELIUS] CoinGecko API failed', { error });
+      logger.warn('[HELIUS] CoinGecko API failed', { error: error instanceof Error ? error.message : error });
     }
 
     // Final fallback to approximate market price
-    logger.warn('[HELIUS] All price APIs failed, using market price fallback');
+    logger.warn('[HELIUS] All price APIs failed, using market price fallback ($194)');
     return 194; // Fallback to approximate current market price
   }
 
