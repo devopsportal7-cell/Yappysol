@@ -110,19 +110,36 @@ export class UserPortfolioService {
 
   async formatPortfolioForChat(walletAddress: string) {
     try {
-      const tokens = await this.getUserPortfolio(walletAddress);
-      if (!tokens.length) return 'No tokens found in your wallet.';
-      let msg = `Here are the tokens in your wallet (${walletAddress}):\n`;
+      // Get portfolio with metadata (includes SOL + SPL tokens)
+      const tokens = await this.getUserPortfolioWithMetadata(walletAddress);
+      
+      if (!tokens || tokens.length === 0) return 'No tokens found in your wallet.';
+      
+      let msg = `Here are the assets in your wallet (${walletAddress}):\n\n`;
+      
       for (const t of tokens) {
-        msg += `\n• [${t.symbol}](${t.solscan})`;
-        if (t.name) msg += ` (${t.name})`;
-        if (t.image) msg += ` ![](${t.image})`;
-        msg += `\n  Amount: ${t.uiAmount}`;
-        if (t.usdValue) msg += ` ($${t.usdValue} USD)`;
+        msg += `**${t.symbol}**`;
+        if (t.symbol === 'SOL') msg += ` (Native Solana)`;
+        msg += `\n`;
+        
+        if (t.image) msg += `![${t.symbol}](${t.image})\n`;
+        
+        msg += `Balance: ${t.balance.toFixed(4)} ${t.symbol}`;
+        if (t.price > 0) {
+          msg += `\nPrice: $${t.price.toFixed(2)} USD`;
+          msg += `\nValue: $${t.balanceUsd.toFixed(2)} USD`;
+        }
+        
+        if (t.mint !== SOL_MINT) {
+          msg += `\n[View on Solscan](${t.solscanUrl})`;
+        }
+        msg += `\n\n`;
       }
+      
       return msg;
     } catch (e) {
-      return 'Failed to fetch your portfolio.';
+      console.error('[UserPortfolioService] Error formatting portfolio:', e);
+      return 'Failed to fetch your portfolio. Please try again.';
     }
   }
 
