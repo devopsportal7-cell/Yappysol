@@ -54,6 +54,10 @@ router.post('/login', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: result.error });
   }
 
+  // Fetch user wallets for the response
+  const { WalletService } = await import('../services/WalletService');
+  const wallets = await WalletService.getUserWallets(result.user!.id);
+  
   res.json({
     message: 'Login successful',
     user: {
@@ -64,6 +68,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       createdAt: result.user!.created_at,
       solBalance: 0
     },
+    wallets: wallets || [], // Include wallets array to prevent reduce error
     token: result.token
   });
 }));
