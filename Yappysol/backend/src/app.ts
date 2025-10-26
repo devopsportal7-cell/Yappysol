@@ -84,11 +84,8 @@ const initializeServices = async () => {
     await websocketBalanceSubscriber.subscribeToAllUserWallets();
     console.log('✅ WebSocket balance subscriber initialized');
 
-    // Start frontend WebSocket server
-    const { frontendWebSocketServer } = await import('./services/FrontendWebSocketServer');
-    const wsPort = parseInt(process.env.FRONTEND_WS_PORT || '8080');
-    frontendWebSocketServer.start(wsPort);
-    console.log(`✅ Frontend WebSocket server started on port ${wsPort}`);
+    // Note: Frontend WebSocket server is now attached in index.ts
+    // This ensures it shares the same HTTP server on Render
 
     // Load platform wallets for external transaction detection
     const { externalTransactionService } = await import('./services/ExternalTransactionService');

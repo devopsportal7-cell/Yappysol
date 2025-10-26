@@ -20,12 +20,12 @@ export class FrontendWebSocketServer {
   }
 
   /**
-   * Start the WebSocket server for frontend connections
+   * Attach WebSocket server to existing HTTP server
    */
-  start(port: number = 8080): void {
+  attachToServer(server: any): void {
     try {
       this.wss = new WebSocket.Server({ 
-        port,
+        server,
         path: '/ws'
       });
 
@@ -76,10 +76,18 @@ export class FrontendWebSocketServer {
         logger.error('[Frontend WS] Server error', { error });
       });
 
-      logger.info('[Frontend WS] Server started', { port, path: '/ws' });
+      logger.info('[Frontend WS] Server attached to HTTP server', { path: '/ws' });
     } catch (error) {
-      logger.error('[Frontend WS] Failed to start server', { error });
+      logger.error('[Frontend WS] Failed to attach server', { error });
     }
+  }
+
+  /**
+   * Start standalone WebSocket server (deprecated - use attachToServer instead)
+   */
+  start(port: number = 8080): void {
+    logger.warn('[Frontend WS] Using deprecated start() method. Use attachToServer() instead.');
+    this.attachToServer({ port } as any);
   }
 
   /**
