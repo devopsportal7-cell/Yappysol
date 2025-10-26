@@ -56,14 +56,28 @@ export class BalanceCacheService {
 
       // Check if cache is still valid
       if (this.isCacheValid(cachedData.last_updated)) {
-        logger.info('[CACHE] Cache hit, returning cached data', { walletAddress });
+        logger.info('[CACHE] Cache hit, returning cached data', { 
+          walletAddress,
+          totalSolValue: cachedData.total_sol_value,
+          totalUsdValue: cachedData.total_usd_value
+        });
         
         // Get token balances from cache
         const tokenBalances = await this.getTokenBalancesFromCache(walletAddress);
         
+        // Check if cached values are all zeros (likely invalid data)
+        // Use Number() conversion in case database returns numeric as string
+        const solValue = Number(cachedData.total_sol_value);
+        const usdValue = Number(cachedData.total_usd_value);
+        
+        if (solValue === 0 && usdValue === 0) {
+          logger.warn('[CACHE] Cached data has all zeros, fetching fresh from Helius', { walletAddress });
+          return await this.fetchFromHelius(walletAddress);
+        }
+        
         return {
-          totalSolValue: cachedData.total_sol_value,
-          totalUsdValue: cachedData.total_usd_value,
+          totalSolValue: solValue,
+          totalUsdValue: usdValue,
           tokens: tokenBalances
         };
       } else {
