@@ -723,26 +723,35 @@ export class TokenSwapService {
           }
         }
         
-        // If we didn't succeed with PumpPortal, try Jupiter Ultra Swap as fallback
+        // If we didn't succeed with PumpPortal, try Jupiter v6 API as fallback
         if (!pumpSuccess) {
-          console.log('[TokenSwapService] Attempting swap with Jupiter Ultra Swap...');
+          console.log('[TokenSwapService] Attempting swap with Jupiter v6 API...');
           try {
-            const { jupiterUltraSwapService } = await import('./JupiterUltraSwapService');
+            const { jupiterSwapService } = await import('./JupiterSwapService');
             const { WalletModel } = await import('../models/WalletSupabase');
             
             // Get user's keypair
             const keypair = await WalletModel.getKeypair(walletInfo.id);
             
-            // Calculate amounts in lamports (Ultra API uses lamports)
+            // Calculate amounts in lamports based on token decimals
+            // For SOL to Token: amount is in SOL, convert to lamports (9 decimals)
+            // For Token to SOL: amount is in token units, need to convert to smallest token unit
             const amountLamports = action === 'buy' 
-              ? amount * 1e9  // SOL amount in lamports
-              : amount * 1e6; // Token amount (assume 6 decimals for most tokens)
+              ? amount * 1e9  // SOL amount in lamports (9 decimals)
+              : amount * 1e6; // Token amount in smallest units (assume 6 decimals for USDT/USDC)
             
             const inputMint = action === 'buy' ? 'So11111111111111111111111111111111111111112' : mint;
             const outputMint = action === 'buy' ? mint : 'So11111111111111111111111111111111111111112';
             
-            // Perform swap with Jupiter Ultra Swap
-            const signature = await jupiterUltraSwapService.performSwap(keypair, {
+            console.log('[TokenSwapService] Jupiter swap parameters:', {
+              inputMint,
+              outputMint,
+              amount: amountLamports,
+              action
+            });
+            
+            // Perform swap with Jupiter v6 API
+            const signature = await jupiterSwapService.performSwap(keypair, {
               userPublicKey: walletInfo.publicKey,
               inputMint,
               outputMint,
@@ -750,7 +759,7 @@ export class TokenSwapService {
               slippageBps: 50 // 0.5%
             });
             
-            console.log('[TokenSwapService] ✅ Jupiter Ultra Swap successful:', signature);
+            console.log('[TokenSwapService] ✅ Jupiter swap successful:', signature);
             
             // Success message
             const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
@@ -785,10 +794,25 @@ export class TokenSwapService {
               amount: session.amount
             });
             delete swapSessions[userId];
-            return { 
-              prompt: `❌ Swap failed. We encountered technical difficulties. Please try again or contact support if the issue persists.`,
-              step: null 
-            };
+            
+            // Check if it's a network/API error vs a transaction error
+            const errorMsg = jupiterError.message?.toLowerCase() || '';
+            if (errorMsg.includes('getaddrinfo') || errorMsg.includes('enotfound')) {
+              return { 
+                prompt: `❌ Unable to connect to swap service. This may be a temporary network issue. Please try again in a moment.`,
+                step: null 
+              };
+            } else if (errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
+              return { 
+                prompt: `❌ Insufficient balance for this swap. Please check your wallet balance and try again.`,
+                step: null 
+              };
+            } else {
+              return { 
+                prompt: `❌ Swap failed. We encountered technical difficulties. Please try again or contact support if the issue persists.`,
+                step: null 
+              };
+            }
           }
         }
       } catch (e: any) {

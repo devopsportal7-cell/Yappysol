@@ -33,34 +33,33 @@ export interface UltraExecuteResponse {
 }
 
 export class JupiterUltraSwapService {
-  private readonly ultraOrderUrl = 'https://quote-api.jup.ag/v6/quote'; // Use legacy v6 for now
-  private readonly ultraExecuteUrl = 'https://quote-api.jup.ag/v6/swap'; // Use legacy v6 for now
+  // Jupiter API v6 endpoints
+  private readonly quoteUrl = 'https://quote-api.jup.ag/v6/quote';
+  private readonly swapUrl = 'https://quote-api.jup.ag/v6/swap';
+  
+  // Fallback base URL in case of DNS issues
+  private readonly heliusRpcUrl = process.env.HELIUS_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=';
 
   /**
-   * Create an order for a swap
-   * POST /order endpoint
-   * Docs: https://dev.jup.ag/docs/ultra/get-order
+   * Get a quote for a swap using Jupiter v6 API
    */
-  async createOrder(params: UltraOrderParams): Promise<UltraOrderResponse> {
+  async getQuote(params: UltraOrderParams): Promise<any> {
     const {
-      userPublicKey,
       inputMint,
       outputMint,
       amount,
-      slippageBps = 50 // 0.5% default
+      slippageBps = 50
     } = params;
 
     try {
-      console.log('[JupiterUltraSwap] Creating order:', {
-        userPublicKey,
+      console.log('[JupiterUltraSwap] Getting quote:', {
         inputMint,
         outputMint,
         amount,
         slippageBps
       });
 
-      // Use Jupiter v6 API for quote
-      const url = new URL(this.ultraOrderUrl);
+      const url = new URL(this.quoteUrl);
       url.searchParams.append('inputMint', inputMint);
       url.searchParams.append('outputMint', outputMint);
       url.searchParams.append('amount', amount.toString());
@@ -71,17 +70,20 @@ export class JupiterUltraSwapService {
       const response = await axios.get(url.toString());
 
       if (response.status !== 200) {
-        throw new Error(`Jupiter Ultra API error: ${response.status}`);
+        throw new Error(`Jupiter quote API error: ${response.status}`);
       }
 
-      const orderData = response.data;
-      console.log('[JupiterUltraSwap] Order created:', orderData.orderId);
+      const quote = response.data;
+      console.log('[JupiterUltraSwap] Quote received:', {
+        inAmount: quote.inAmount,
+        outAmount: quote.outAmount,
+        priceImpact: quote.priceImpactPct
+      });
 
-      return orderData;
+      return quote;
     } catch (error: any) {
-      console.error('[JupiterUltraSwap] Error creating order:', {
+      console.error('[JupiterUltraSwap] Error getting quote:', {
         error: error.message,
-        stack: error.stack,
         params
       });
       throw error;
@@ -89,61 +91,78 @@ export class JupiterUltraSwapService {
   }
 
   /**
-   * Execute an order (get unsigned tx, sign, and submit)
-   * POST /execute endpoint
-   * Docs: https://dev.jup.ag/docs/ultra/execute-order
+   * Get swap transaction from Jupiter
    */
-  async executeOrder(
-    orderId: string,
-    keypair: Keypair
-  ): Promise<UltraExecuteResponse> {
+  async getSwapTransaction(
+    keypair: Keypair,
+    params: UltraOrderParams
+  ): Promise<string> {
     try {
-      console.log('[JupiterUltraSwap] Executing order:', orderId);
+      console.log('[JupiterUltraSwap] Getting swap transaction:', params);
 
-      // Step 1: Get unsigned transaction from Jupiter
-      const response = await axios.post(
-        `${this.ultraExecuteUrl}/${orderId}`,
-        {
-          publicKey: keypair.publicKey.toString()
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
+      // Step 1: Get quote
+      const quote = await this.getQuote(params);
+
+      // Step 2: Get swap transaction
+      const swapParams = {
+        quoteResponse: quote,
+        userPublicKey: keypair.publicKey.toString(),
+        wrapUnwrapSOL: true,
+        asLegacyTransaction: false
+      };
+
+      const response = await axios.post(this.swapUrl, swapParams, {
+        headers: {
+          'Content-Type': 'application/json'
         }
-      );
+      });
 
       if (response.status !== 200) {
-        throw new Error(`Jupiter Ultra Execute API error: ${response.status}`);
+        throw new Error(`Jupiter swap API error: ${response.status}`);
       }
 
-      const executeData = response.data;
-      console.log('[JupiterUltraSwap] Got unsigned transaction:', executeData);
+      const { swapTransaction } = response.data;
+      console.log('[JupiterUltraSwap] Swap transaction received');
 
-      // Step 2: Sign the transaction with keypair
-      if (!executeData.transaction) {
-        throw new Error('No transaction data returned from Jupiter');
-      }
+      return swapTransaction;
+    } catch (error: any) {
+      console.error('[JupiterUltraSwap] Error getting swap transaction:', {
+        error: error.message,
+        params
+      });
+      throw error;
+    }
+  }
 
+  /**
+   * Perform complete swap using Jupiter v6 API
+   * This is the main method to call
+   */
+  async performSwap(
+    keypair: Keypair,
+    params: UltraOrderParams
+  ): Promise<string> {
+    try {
+      console.log('[JupiterUltraSwap] Performing swap...', params);
+
+      // Step 1: Get swap transaction
+      const swapTransactionBase64 = await this.getSwapTransaction(keypair, params);
+
+      // Step 2: Decode and sign the transaction
       const transactionBytes = Uint8Array.from(
-        atob(executeData.transaction),
+        atob(swapTransactionBase64),
         c => c.charCodeAt(0)
       );
 
-      // Deserialize and sign (handle both legacy and versioned transactions)
-      let transaction: Transaction | VersionedTransaction;
-      let isVersioned = false;
-      
+      let transaction: VersionedTransaction;
       try {
-        // Try as VersionedTransaction first
         transaction = VersionedTransaction.deserialize(transactionBytes);
-        isVersioned = true;
-        transaction.sign([keypair]);
       } catch (e) {
-        // Fall back to legacy Transaction
-        transaction = Transaction.from(transactionBytes);
-        transaction.sign(keypair);
+        throw new Error('Failed to deserialize transaction');
       }
+
+      // Sign with keypair
+      transaction.sign([keypair]);
 
       // Step 3: Submit signed transaction to network
       const connection = new Connection('https://api.mainnet-beta.solana.com');
@@ -168,51 +187,8 @@ export class JupiterUltraSwapService {
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
 
-      return {
-        orderId,
-        status: 'success',
-        transactionSignature: signature
-      };
-    } catch (error: any) {
-      console.error('[JupiterUltraSwap] Error executing order:', {
-        error: error.message,
-        stack: error.stack,
-        orderId
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Perform complete swap using Ultra API
-   * This is the main method to call
-   */
-  async performSwap(
-    keypair: Keypair,
-    params: UltraOrderParams
-  ): Promise<string> {
-    try {
-      // Step 1: Create order
-      console.log('[JupiterUltraSwap] Creating swap order...');
-      const order = await this.createOrder({
-        ...params,
-        userPublicKey: keypair.publicKey.toString()
-      });
-
-      // Step 2: Execute order (signs and submits)
-      console.log('[JupiterUltraSwap] Executing order...');
-      const result = await this.executeOrder(order.orderId, keypair);
-
-      if (result.status !== 'success') {
-        throw new Error(`Swap failed: ${result.error || 'Unknown error'}`);
-      }
-
-      if (!result.transactionSignature) {
-        throw new Error('No transaction signature returned');
-      }
-
-      console.log('[JupiterUltraSwap] ✅ Swap successful:', result.transactionSignature);
-      return result.transactionSignature;
+      console.log('[JupiterUltraSwap] ✅ Swap successful:', signature);
+      return signature;
     } catch (error: any) {
       console.error('[JupiterUltraSwap] Error performing swap:', {
         error: error.message,
