@@ -116,7 +116,7 @@ const initializeServices = async () => {
             console.log('⏸️ Background balance update service disabled (ENABLE_BACKGROUND_UPDATES=false)');
         }
         // Initialize WebSocket subscriber for real-time transaction detection
-        // Always enabled for transaction detection and balance updates
+        // Always enabled - uses SOLANA_WSS_URL from environment (Doppler)
         try {
             const { websocketBalanceSubscriber } = await Promise.resolve().then(() => __importStar(require('./services/WebsocketBalanceSubscriber')));
             await websocketBalanceSubscriber.subscribeToAllUserWallets();

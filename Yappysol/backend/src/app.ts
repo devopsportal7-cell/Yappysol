@@ -85,7 +85,7 @@ const initializeServices = async () => {
     }
 
     // Initialize WebSocket subscriber for real-time transaction detection
-    // Always enabled for transaction detection and balance updates
+    // Always enabled - uses SOLANA_WSS_URL from environment (Doppler)
     try {
       const { websocketBalanceSubscriber } = await import('./services/WebsocketBalanceSubscriber');
       await websocketBalanceSubscriber.subscribeToAllUserWallets();

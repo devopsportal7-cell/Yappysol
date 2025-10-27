@@ -22,15 +22,8 @@ export class WebsocketBalanceSubscriber {
   private connect() {
     try {
       // Use Solana WebSocket endpoint from environment
-      // Helius WebSocket is recommended (more reliable than public RPC)
-      let wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
-      
-      // If using Helius, check if it's correctly formatted
-      if (wsUrl.includes('helius-rpc.com')) {
-        // Helius WebSocket might not support ?api-key= in the URL
-        // Try without API key or use different endpoint
-        logger.warn('[WSS] Helius WebSocket URL detected. If getting 429 errors, consider using native Solana WebSocket.');
-      }
+      // Default to native Solana WebSocket
+      const wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
       
       logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl });
 
