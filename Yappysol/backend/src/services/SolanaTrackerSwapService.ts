@@ -96,7 +96,12 @@ export class SolanaTrackerSwapService {
           'Accept': 'application/json',
         },
         timeout: 15_000,
+        validateStatus: (status) => status < 500, // Don't throw on 4xx, but accept up to 499
       });
+
+      if (response.status === 502 || response.status >= 500) {
+        throw new Error(`Solana Tracker returned ${response.status} - service may be temporarily down`);
+      }
 
       if (response.status !== 200) {
         throw new Error(`Solana Tracker returned status ${response.status}`);

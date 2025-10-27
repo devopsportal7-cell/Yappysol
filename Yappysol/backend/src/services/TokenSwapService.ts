@@ -756,6 +756,36 @@ export class TokenSwapService {
             
             console.log('[TokenSwapService] ✅ Solana Tracker swap successful:', signature);
             
+            // Log swap to database
+            try {
+              await swapTrackingService.recordSwap({
+                user_id: userId,
+                wallet_id: walletInfo.id,
+                from_token_mint: session.fromToken,
+                from_token_symbol: POPULAR_TOKENS.find(t => t.mint === session.fromToken)?.symbol,
+                from_token_amount: session.amount,
+                to_token_mint: session.toToken,
+                to_token_symbol: POPULAR_TOKENS.find(t => t.mint === session.toToken)?.symbol,
+                transaction_signature: signature,
+                execution_provider: 'jupiter', // Using Jupiter as Solana Tracker uses Jupiter internally
+                status: 'confirmed',
+                solscan_url: `https://solscan.io/tx/${signature}`,
+                slippage_bps: 1000 // 10%
+              });
+              console.log('[TokenSwapService] Swap logged to database');
+            } catch (trackError) {
+              console.error('[TokenSwapService] Failed to log swap to database:', trackError);
+            }
+            
+            // Trigger wallet refresh to update balance
+            try {
+              const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+              requestWalletRefresh(walletInfo.publicKey, true);
+              console.log('[TokenSwapService] Wallet refresh requested for:', walletInfo.publicKey);
+            } catch (refreshError) {
+              console.error('[TokenSwapService] Failed to refresh wallet:', refreshError);
+            }
+            
             // Success message
             const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
             const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };

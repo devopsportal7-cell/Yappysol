@@ -93,8 +93,33 @@ export class HeliusBalanceService {
         };
       }
 
+      // Import services for enriching token data
+      const { TokenMetadataService } = await import('./TokenMetadataService');
+      const { getMoralis } = await import('../lib/moralis');
+      const moralis = getMoralis();
+      
       for (const token of tokenBalances) {
-        const priceUsd = await this.getTokenPrice(token.mint);
+        // Step 1: Get price from Moralis (primary source)
+        let priceUsd = 0;
+        try {
+          const priceResponse = await moralis.SolApi.token.getTokenPrice({
+            network: 'mainnet',
+            address: token.mint
+          });
+          priceUsd = priceResponse?.raw?.usdPrice || 0;
+        } catch (error) {
+          // If Moralis fails, try Helius price endpoint
+          priceUsd = await this.getTokenPrice(token.mint);
+        }
+        
+        // Step 2: Fallback to stablecoin price for USDC/USDT if still 0
+        if (priceUsd === 0 && TokenMetadataService.isStablecoin(token.mint)) {
+          priceUsd = TokenMetadataService.getStablecoinPrice(token.mint);
+          logger.info('[HELIUS] Using stablecoin price', { mint: token.mint, priceUsd });
+        }
+        
+        // Step 3: Enrich with metadata
+        const enrichedToken = TokenMetadataService.enrichToken(token);
         
         const usdEquivalent = token.uiAmount * priceUsd;
         const solEquivalent = usdEquivalent / solPrice; // Use already-fetched solPrice
@@ -104,14 +129,14 @@ export class HeliusBalanceService {
 
         processedTokens.push({
           mint: token.mint,
-          symbol: token.symbol || 'UNKNOWN',
-          name: token.name,
+          symbol: enrichedToken.symbol || 'UNKNOWN',
+          name: enrichedToken.name || enrichedToken.symbol,
           accountUnit: token.mint,
           uiAmount: token.uiAmount,
           priceUsd,
           solEquivalent,
           usdEquivalent,
-          image: token.image,
+          image: enrichedToken.image || token.image,
           solscanUrl: `https://solscan.io/token/${token.mint}`,
           decimals: token.decimals
         });

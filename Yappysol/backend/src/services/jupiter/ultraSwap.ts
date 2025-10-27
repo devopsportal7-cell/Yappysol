@@ -108,7 +108,8 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
         requestId: response.data.requestId,
         transaction: response.data.transaction ? 'present' : 'missing',
         router: response.data.router,
-        endpoint: usedLite ? 'Lite (Free)' : 'Pro (Paid)'
+        endpoint: usedLite ? 'Lite (Free)' : 'Pro (Paid)',
+        usedLiteFlag: usedLite
       });
       
       return {
@@ -132,23 +133,55 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
  */
 export async function executeUltraOrder(
   requestId: string,
-  signedTransactionBase64: string
+  signedTransactionBase64: string,
+  useLiteEndpoint = false
 ): Promise<string> {
-  console.log('[Jupiter Ultra] Executing order with signed transaction', { requestId });
+  console.log('[Jupiter Ultra] Executing order with signed transaction', { 
+    requestId,
+    endpoint: useLiteEndpoint ? 'Lite' : 'Pro'
+  });
 
   try {
-    // POST signed transaction AND requestId to /execute
-    const response = await httpClient.post(
-      JUP_ULTRA_EXECUTE,
-      {
-        signedTransaction: signedTransactionBase64,
-        requestId: requestId  // ✅ Required by API spec
-      },
-      {
-        headers: getJupiterHeaders(),
-        timeout: 15_000,
+    // Try with Pro endpoint first
+    let executeUrl = JUP_ULTRA_EXECUTE;
+    let headers = getJupiterHeaders();
+    
+    let response;
+    try {
+      response = await httpClient.post(
+        executeUrl,
+        {
+          signedTransaction: signedTransactionBase64,
+          requestId: requestId
+        },
+        {
+          headers,
+          timeout: 15_000,
+        }
+      );
+    } catch (e: any) {
+      // If 401 and we should use Lite, try Lite endpoint
+      if (e?.response?.status === 401 && useLiteEndpoint) {
+        console.log('[Jupiter Ultra] 401 from Pro execute, falling back to Lite execute...');
+        executeUrl = JUP_ULTRA_EXECUTE.replace('https://api.jup.ag/ultra/v1', 'https://lite-api.jup.ag/ultra/v1');
+        // Remove API key for Lite
+        const { 'x-api-key': _, ...liteHeaders } = headers;
+        
+        response = await httpClient.post(
+          executeUrl,
+          {
+            signedTransaction: signedTransactionBase64,
+            requestId: requestId
+          },
+          {
+            headers: liteHeaders,
+            timeout: 15_000,
+          }
+        );
+      } else {
+        throw e;
       }
-    );
+    }
 
     if (response.status !== 200 || !response.data?.signature) {
       throw new Error(`Ultra execute returned status ${response.status} or missing signature`);
@@ -198,9 +231,11 @@ export async function performUltraSwap(
     const signedTransactionBase64 = Buffer.from(transaction.serialize()).toString('base64');
     
     console.log('[Jupiter Ultra] Transaction signed');
+    console.log('[Jupiter Ultra] About to execute with usedLiteEndpoint:', order.usedLiteEndpoint);
     
     // Step 3: Execute order (POST signed transaction + requestId to /execute)
-    const signature = await executeUltraOrder(order.orderId, signedTransactionBase64);
+    // Pass the usedLiteEndpoint flag to ensure we use the same endpoint for execute
+    const signature = await executeUltraOrder(order.orderId, signedTransactionBase64, order.usedLiteEndpoint || false);
 
     return signature;
   } catch (error: any) {

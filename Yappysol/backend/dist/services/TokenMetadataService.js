@@ -1,114 +1,88 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.tokenMetadataService = void 0;
-const axios_1 = __importDefault(require("axios"));
-const config_1 = __importDefault(require("../config"));
-const node_cache_1 = __importDefault(require("node-cache"));
+exports.TokenMetadataService = void 0;
+const logger_1 = require("../utils/logger");
+/**
+ * Token metadata for popular Solana tokens
+ * Used when Helius doesn't return symbol/name
+ */
+const KNOWN_TOKENS = {
+    'So11111111111111111111111111111111111111112': {
+        symbol: 'SOL',
+        name: 'Solana',
+        image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+        decimals: 9
+    },
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {
+        symbol: 'USDC',
+        name: 'USD Coin',
+        image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+        decimals: 6
+    },
+    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': {
+        symbol: 'USDT',
+        name: 'Tether',
+        image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png',
+        decimals: 6
+    },
+    'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': {
+        symbol: 'BONK',
+        name: 'Bonk',
+        image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png',
+        decimals: 5
+    },
+    '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': {
+        symbol: 'RAY',
+        name: 'Raydium',
+        image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png',
+        decimals: 6
+    }
+};
+const STABLECOIN_PRICES = {
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 1.0, // USDC
+    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 1.0, // USDT
+};
 class TokenMetadataService {
-    constructor() {
-        this.requestQueue = [];
-        this.processingQueue = false;
-        this.RATE_LIMIT_DELAY = 1000; // 1 second between requests
-        this.CACHE_TTL = 3600; // 1 hour cache
-        this.cache = new node_cache_1.default({ stdTTL: this.CACHE_TTL });
+    /**
+     * Get token metadata (symbol, name, image) for a mint address
+     */
+    static getMetadata(mint) {
+        const metadata = KNOWN_TOKENS[mint];
+        if (metadata) {
+            logger_1.logger.info('[TokenMetadata] Found metadata for', { mint, symbol: metadata.symbol });
+            return metadata;
+        }
+        logger_1.logger.warn('[TokenMetadata] No metadata found for', { mint });
+        return null;
     }
-    static getInstance() {
-        if (!TokenMetadataService.instance) {
-            TokenMetadataService.instance = new TokenMetadataService();
-        }
-        return TokenMetadataService.instance;
+    /**
+     * Get stablecoin price (always 1.0 for USDC/USDT)
+     */
+    static getStablecoinPrice(mint) {
+        return STABLECOIN_PRICES[mint] || 0;
     }
-    async processQueue() {
-        if (this.processingQueue)
-            return;
-        this.processingQueue = true;
-        while (this.requestQueue.length > 0) {
-            const request = this.requestQueue.shift();
-            if (request) {
-                try {
-                    await request;
-                    await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_DELAY));
-                }
-                catch (error) {
-                    console.error('Error processing request:', error);
-                }
-            }
-        }
-        this.processingQueue = false;
+    /**
+     * Check if a mint is a stablecoin
+     */
+    static isStablecoin(mint) {
+        return mint in STABLECOIN_PRICES;
     }
-    async makeRequest(mintAccounts) {
-        const cacheKey = mintAccounts.sort().join(',');
-        const cachedData = this.cache.get(cacheKey);
-        if (cachedData) {
-            return cachedData;
+    /**
+     * Enrich token data with metadata
+     */
+    static enrichToken(token) {
+        const metadata = this.getMetadata(token.mint);
+        if (metadata) {
+            token.symbol = metadata.symbol;
+            token.name = metadata.name;
+            token.image = metadata.image;
+            token.decimals = metadata.decimals || token.decimals;
         }
-        const request = axios_1.default.post(`https://api.helius.xyz/v0/token-metadata?api-key=${config_1.default.HELIUS_API_KEY}`, {
-            mintAccounts,
-            includeOffChain: false,
-            disableCache: false
-        }).then(response => {
-            const data = response.data;
-            this.cache.set(cacheKey, data);
-            return data;
-        });
-        this.requestQueue.push(request);
-        this.processQueue();
-        return request;
-    }
-    async getTokenMetadata(mint) {
-        try {
-            const response = await this.makeRequest([mint]);
-            const metadata = response[0];
-            if (!metadata) {
-                throw new Error('No metadata found for token');
-            }
-            return {
-                name: metadata.name || '',
-                symbol: metadata.symbol || '',
-                mint: metadata.mint || mint,
-                standard: metadata.standard || '',
-                tokenAddress: mint,
-                uri: metadata.uri || undefined
-            };
+        // For stablecoins, set price to 1.0
+        if (this.isStablecoin(token.mint)) {
+            token.price = 1.0;
         }
-        catch (error) {
-            console.error('Error fetching token metadata:', error);
-            return {
-                name: '',
-                symbol: '',
-                mint,
-                standard: '',
-                tokenAddress: mint,
-                uri: undefined
-            };
-        }
-    }
-    async getMultipleTokenMetadata(mints) {
-        try {
-            const response = await this.makeRequest(mints);
-            return response.map((metadata) => ({
-                name: metadata.name || '',
-                symbol: metadata.symbol || '',
-                mint: metadata.mint || '',
-                standard: metadata.standard || '',
-                tokenAddress: metadata.mint || '',
-                uri: metadata.uri || undefined
-            }));
-        }
-        catch (error) {
-            console.error('Error fetching multiple token metadata:', error);
-            return mints.map(mint => ({
-                name: '',
-                symbol: '',
-                mint,
-                standard: '',
-                tokenAddress: mint,
-                uri: undefined
-            }));
-        }
+        return token;
     }
 }
-exports.tokenMetadataService = TokenMetadataService.getInstance();
+exports.TokenMetadataService = TokenMetadataService;
