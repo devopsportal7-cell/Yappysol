@@ -1,6 +1,15 @@
 // Jupiter Ultra Swap API endpoints
 export const JUP_ULTRA_ORDER   = 'https://api.jup.ag/ultra/v1/order';
 export const JUP_ULTRA_EXECUTE = 'https://api.jup.ag/ultra/v1/execute';
+export const JUP_LITE_ORDER    = 'https://lite-api.jup.ag/ultra/v1/order';
+export const JUP_LITE_EXECUTE  = 'https://lite-api.jup.ag/ultra/v1/execute';
+
+/**
+ * Check if an endpoint URL is a Lite endpoint
+ */
+export function isLiteEndpoint(url: string): boolean {
+  return url.includes('lite-api.jup.ag');
+}
 
 // Legacy v6 endpoints (fallback only)
 export const JUP_V6_QUOTE      = 'https://quote-api.jup.ag/v6/quote';

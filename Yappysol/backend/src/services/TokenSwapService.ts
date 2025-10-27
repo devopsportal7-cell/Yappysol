@@ -723,43 +723,38 @@ export class TokenSwapService {
           }
         }
         
-        // If we didn't succeed with PumpPortal, try Jupiter v6 API as fallback
+        // If we didn't succeed with PumpPortal, try Solana Tracker (free, API-key-less)
         if (!pumpSuccess) {
-          console.log('[TokenSwapService] Attempting swap with Jupiter v6 API...');
+          console.log('[TokenSwapService] Attempting swap with Solana Tracker API...');
           try {
-            const { jupiterSwapService } = await import('./JupiterSwapService');
+            const { solanaTrackerSwapService } = await import('./SolanaTrackerSwapService');
             const { WalletModel } = await import('../models/WalletSupabase');
             
             // Get user's keypair
             const keypair = await WalletModel.getKeypair(walletInfo.id);
             
-            // Calculate amounts in lamports based on token decimals
-            // For SOL to Token: amount is in SOL, convert to lamports (9 decimals)
-            // For Token to SOL: amount is in token units, need to convert to smallest token unit
-            const amountLamports = action === 'buy' 
-              ? amount * 1e9  // SOL amount in lamports (9 decimals)
-              : amount * 1e6; // Token amount in smallest units (assume 6 decimals for USDT/USDC)
+            const fromMint = action === 'buy' ? 'So11111111111111111111111111111111111111112' : mint;
+            const toMint = action === 'buy' ? mint : 'So11111111111111111111111111111111111111112';
             
-            const inputMint = action === 'buy' ? 'So11111111111111111111111111111111111111112' : mint;
-            const outputMint = action === 'buy' ? mint : 'So11111111111111111111111111111111111111112';
-            
-            console.log('[TokenSwapService] Jupiter swap parameters:', {
-              inputMint,
-              outputMint,
-              amount: amountLamports,
+            console.log('[TokenSwapService] Solana Tracker swap parameters:', {
+              from: fromMint,
+              to: toMint,
+              fromAmount: amount,
               action
             });
             
-            // Perform swap with Jupiter v6 API
-            const signature = await jupiterSwapService.performSwap(keypair, {
-              userPublicKey: walletInfo.publicKey,
-              inputMint,
-              outputMint,
-              amount: amountLamports,
-              slippageBps: 50 // 0.5%
+            // Perform swap with Solana Tracker API
+            const signature = await solanaTrackerSwapService.performSwap(keypair, {
+              from: fromMint,
+              to: toMint,
+              fromAmount: amount,
+              slippage: 10, // 10% slippage
+              payer: walletInfo.publicKey,
+              priorityFee: 0.000005,
+              txVersion: 'v0'
             });
             
-            console.log('[TokenSwapService] ✅ Jupiter swap successful:', signature);
+            console.log('[TokenSwapService] ✅ Solana Tracker swap successful:', signature);
             
             // Success message
             const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
@@ -770,7 +765,7 @@ export class TokenSwapService {
             delete swapSessions[userId];
             
             return {
-              prompt: `✅ Swap successful via Jupiter!\n\n` +
+              prompt: `✅ Swap successful via Solana Tracker!\n\n` +
                 `**You swapped:** ${session.amount} ${fromSymbol} → ${toSymbol}\n` +
                 `**Transaction:** ${signature}\n\n` +
                 `[View on Solscan](https://solscan.io/tx/${signature})`,
@@ -785,33 +780,73 @@ export class TokenSwapService {
               }
             };
             
-          } catch (jupiterError: any) {
-            console.error('[TokenSwapService] Jupiter fallback also failed:', {
-              error: jupiterError.message,
-              stack: jupiterError.stack,
+          } catch (trackerError: any) {
+            console.error('[TokenSwapService] Solana Tracker fallback failed:', {
+              error: trackerError.message,
+              stack: trackerError.stack,
               fromToken: session.fromToken,
               toToken: session.toToken,
               amount: session.amount
             });
-            delete swapSessions[userId];
             
-            // Check if it's a network/API error vs a transaction error
-            const errorMsg = jupiterError.message?.toLowerCase() || '';
-            if (errorMsg.includes('getaddrinfo') || errorMsg.includes('enotfound')) {
-              return { 
-                prompt: `❌ Unable to connect to swap service. This may be a temporary network issue. Please try again in a moment.`,
-                step: null 
+            // Try Jupiter as final fallback
+            console.log('[TokenSwapService] Attempting swap with Jupiter Ultra API as final fallback...');
+            try {
+              const { jupiterSwapService } = await import('./JupiterSwapService');
+              const { WalletModel } = await import('../models/WalletSupabase');
+              
+              const keypair = await WalletModel.getKeypair(walletInfo.id);
+              
+              const amountLamports = action === 'buy' 
+                ? amount * 1e9
+                : amount * 1e6;
+              
+              const inputMint = action === 'buy' ? 'So11111111111111111111111111111111111111112' : mint;
+              const outputMint = action === 'buy' ? mint : 'So11111111111111111111111111111111111111112';
+              
+              const signature = await jupiterSwapService.performSwap(keypair, {
+                userPublicKey: walletInfo.publicKey,
+                inputMint,
+                outputMint,
+                amount: amountLamports,
+                slippageBps: 50
+              });
+              
+              const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
+              const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };
+              
+              delete swapSessions[userId];
+              
+              return {
+                prompt: `✅ Swap successful via Jupiter!\n\n` +
+                  `**You swapped:** ${session.amount} ${fromTokenObj.symbol || session.fromToken} → ${toTokenObj.symbol || session.toToken}\n` +
+                  `**Transaction:** ${signature}\n\n` +
+                  `[View on Solscan](https://solscan.io/tx/${signature})`,
+                step: null,
+                action: 'swap-complete',
+                signature,
+                swapDetails: {
+                  fromToken: session.fromToken,
+                  toToken: session.toToken,
+                  amount: session.amount,
+                  signature
+                }
               };
-            } else if (errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
-              return { 
-                prompt: `❌ Insufficient balance for this swap. Please check your wallet balance and try again.`,
-                step: null 
-              };
-            } else {
-              return { 
-                prompt: `❌ Swap failed. We encountered technical difficulties. Please try again or contact support if the issue persists.`,
-                step: null 
-              };
+            } catch (jupiterError: any) {
+              delete swapSessions[userId];
+              
+              const errorMsg = trackerError.message?.toLowerCase() || '';
+              if (errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
+                return { 
+                  prompt: `❌ Insufficient balance for this swap. Please check your wallet balance and try again.`,
+                  step: null 
+                };
+              } else {
+                return { 
+                  prompt: `❌ Swap failed. We encountered technical difficulties. Please try again or contact support if the issue persists.`,
+                  step: null 
+                };
+              }
             }
           }
         }

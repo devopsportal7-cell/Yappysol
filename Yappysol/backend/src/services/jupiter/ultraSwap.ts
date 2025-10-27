@@ -1,5 +1,5 @@
 import { httpClient } from '../../lib/httpClient';
-import { JUP_ULTRA_ORDER, JUP_ULTRA_EXECUTE, getJupiterHeaders } from './constants';
+import { JUP_ULTRA_ORDER, JUP_ULTRA_EXECUTE, getJupiterHeaders, isLiteEndpoint } from './constants';
 import { VersionedTransaction, Keypair } from '@solana/web3.js';
 
 export interface UltraOrderParams {
@@ -14,6 +14,7 @@ export interface UltraOrderResponse {
   orderId: string;
   transaction: string; // base64 encoded transaction
   estimatedOutput?: string;
+  usedLiteEndpoint?: boolean; // Track if we used Lite fallback
 }
 
 export interface UltraExecuteParams {
@@ -67,29 +68,54 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
       slippageBps: String(slippageBps),
     });
 
-    const url = `${JUP_ULTRA_ORDER}?${queryParams.toString()}`;
+    let url = `${JUP_ULTRA_ORDER}?${queryParams.toString()}`;
     
     const headers = getJupiterHeaders();
     console.log('[Jupiter Ultra] Requesting:', url);
     console.log('[Jupiter Ultra] Headers:', { ...headers, 'x-api-key': headers['x-api-key'] ? `${headers['x-api-key'].slice(0, 8)}...${headers['x-api-key'].slice(-4)}` : 'MISSING' });
 
     // Use GET request as per OpenAPI spec
-    const response = await httpClient.get(url, {
-      headers,
-      timeout: 15_000,
-    });
+    let response;
+    let usedLite = false;
+    
+    try {
+      // Try with Pro endpoint (api.jup.ag - requires API key)
+      response = await httpClient.get(url, {
+        headers,
+        timeout: 15_000,
+      });
+    } catch (e: any) {
+      // If 401, try free Lite endpoint (no API key required)
+      if (e?.response?.status === 401) {
+        console.log('[Jupiter Ultra] 401 from Pro endpoint, falling back to free Lite endpoint...');
+        url = url.replace('https://api.jup.ag/ultra/v1', 'https://lite-api.jup.ag/ultra/v1');
+        console.log('[Jupiter Ultra] Trying Lite endpoint:', url);
+        usedLite = true;
+        
+        // Remove API key for Lite endpoint (not required)
+        const { 'x-api-key': _, ...liteHeaders } = headers;
+        response = await httpClient.get(url, {
+          headers: liteHeaders,
+          timeout: 15_000,
+        });
+      } else {
+        throw e;
+      }
+    }
 
     if (response.status === 200 && response.data?.requestId) {
       console.log('[Jupiter Ultra] ✅ Order created:', {
         requestId: response.data.requestId,
         transaction: response.data.transaction ? 'present' : 'missing',
-        router: response.data.router
+        router: response.data.router,
+        endpoint: usedLite ? 'Lite (Free)' : 'Pro (Paid)'
       });
       
       return {
         orderId: response.data.requestId,
         transaction: response.data.transaction || '',
         estimatedOutput: response.data.outAmount,
+        usedLiteEndpoint: usedLite
       };
     }
 
