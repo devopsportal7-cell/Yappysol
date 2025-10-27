@@ -2,99 +2,26 @@ import WebSocket from 'ws';
 import { logger } from '../utils/logger';
 import { externalTransactionService } from '../services/ExternalTransactionService';
 import { TABLES } from '../lib/supabase';
+import { getWs, enqueueAfterOpen, isWsOpen } from '../lib/solanaWs';
+import { subscribeWalletsBatch, unsubscribeWallet } from './realtime';
 
 export class WebsocketBalanceSubscriber {
-  private ws: WebSocket | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectDelay = 30000; // 30 seconds (increased to reduce rate limit issues)
-  private isConnected = false;
   private subscribedWallets = new Set<string>();
   private subscriptionIds = new Map<string, number>(); // Track subscription IDs
   private requestIdToWallet = new Map<number, string>(); // Track request ID to wallet mapping
-  private consecutiveFailures = 0; // Track consecutive connection failures
-  private maxConsecutiveFailures = 5; // Disable after 5 consecutive failures
 
   constructor() {
-    this.connect();
-  }
-
-  private connect() {
-    try {
-      // Use Solana WebSocket endpoint from environment
-      // Default to native Solana WebSocket
-      const wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
-      
-      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl });
-
-      this.ws = new WebSocket(wsUrl);
-
-      this.ws.on('open', () => {
-        logger.info('[WSS] Connected to Solana WebSocket');
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        this.consecutiveFailures = 0; // Reset failure counter on successful connection
-        
-        // Resubscribe to all wallets
-        this.resubscribeAllWallets();
-      });
-
-      this.ws.on('message', (data) => {
-        this.onMessage(data.toString());
-      });
-
-      this.ws.on('close', (code, reason) => {
-        logger.warn('[WSS] WebSocket connection closed', { code, reason: reason.toString() });
-        this.isConnected = false;
-        this.subscriptionIds.clear();
-        this.requestIdToWallet.clear();
-        this.scheduleReconnect();
-      });
-
-      this.ws.on('error', (error) => {
-        logger.error('[WSS] WebSocket error', { error: error.message || error });
-        this.isConnected = false;
-      });
-
-    } catch (error) {
-      logger.error('[WSS] Error connecting to WebSocket', { error });
-      this.scheduleReconnect();
-    }
-  }
-
-  private scheduleReconnect() {
-    this.consecutiveFailures++;
+    // Initialize the shared WebSocket
+    getWs();
     
-    // If we've failed too many times, disable WebSocket to avoid spam
-    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-      logger.error('[WSS] Too many consecutive failures, disabling WebSocket to avoid rate limits. Will retry on next deployment.', {
-        consecutiveFailures: this.consecutiveFailures,
-        message: 'WebSocket disabled due to rate limits. External transactions will still be detected via manual refresh.'
-      });
-      return;
-    }
-    
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('[WSS] Max reconnection attempts reached, giving up');
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), // Exponential backoff
-      300000 // Max 5 minutes between retries
-    );
-    
-    logger.info('[WSS] Scheduling reconnection', { 
-      attempt: this.reconnectAttempts, 
-      delay,
-      consecutiveFailures: this.consecutiveFailures
+    // Set up message handler
+    const ws = getWs();
+    ws.on('message', (data) => {
+      this.onMessage(data.toString());
     });
-
-    setTimeout(() => {
-      this.connect();
-    }, delay);
   }
+
+  // Removed - now using shared WebSocket from solanaWs.ts
 
   private async onMessage(raw: string) {
     try {
@@ -260,39 +187,15 @@ export class WebsocketBalanceSubscriber {
 
   /**
    * Subscribe to account notifications for a wallet using Solana WebSocket format
+   * Uses the new queue-based system from realtime service
    */
   async subscribeToWallet(walletAddress: string): Promise<boolean> {
-    if (!this.isConnected || !this.ws) {
-      logger.warn('[WSS] Cannot subscribe, WebSocket not connected', { walletAddress });
-      return false;
-    }
-
     try {
-      const subscriptionId = Date.now();
-      
-      const subscribeMessage = {
-        jsonrpc: '2.0',
-        id: subscriptionId,
-        method: 'accountSubscribe',
-        params: [
-          walletAddress,
-          {
-            encoding: 'base64',
-            commitment: 'confirmed'
-          }
-        ]
-      };
-
-      this.ws.send(JSON.stringify(subscribeMessage));
+      // Use the realtime service which handles queuing
+      subscribeWalletsBatch([walletAddress]);
       this.subscribedWallets.add(walletAddress);
       
-      // Store the request ID to wallet mapping for subscription confirmation
-      this.requestIdToWallet.set(subscriptionId, walletAddress);
-      
-      logger.info('[WSS] Subscribed to Solana wallet', { 
-        walletAddress, 
-        subscriptionId 
-      });
+      logger.info('[WSS] Subscribed to wallet', { walletAddress });
       return true;
     } catch (error) {
       logger.error('[WSS] Error subscribing to wallet', { error, walletAddress });
@@ -304,27 +207,11 @@ export class WebsocketBalanceSubscriber {
    * Unsubscribe from account notifications for a wallet using Solana WebSocket format
    */
   async unsubscribeFromWallet(walletAddress: string): Promise<boolean> {
-    if (!this.isConnected || !this.ws) {
-      logger.warn('[WSS] Cannot unsubscribe, WebSocket not connected', { walletAddress });
-      return false;
-    }
-
     try {
-      const subscriptionId = this.subscriptionIds.get(walletAddress);
-      if (!subscriptionId) {
-        logger.warn('[WSS] No subscription ID found for wallet', { walletAddress });
-        return false;
-      }
-
-      const unsubscribeMessage = {
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'accountUnsubscribe',
-        params: [subscriptionId]
-      };
-
-      this.ws.send(JSON.stringify(unsubscribeMessage));
+      unsubscribeWallet(walletAddress);
+      
       this.subscribedWallets.delete(walletAddress);
+      const subscriptionId = this.subscriptionIds.get(walletAddress);
       this.subscriptionIds.delete(walletAddress);
       
       // Clean up request ID mapping
@@ -365,19 +252,10 @@ export class WebsocketBalanceSubscriber {
     return this.requestIdToWallet.get(requestId) || null;
   }
 
-  /**
-   * Resubscribe to all wallets
-   */
-  private async resubscribeAllWallets() {
-    logger.info('[WSS] Resubscribing to all wallets', { count: this.subscribedWallets.size });
-    
-    for (const wallet of this.subscribedWallets) {
-      await this.subscribeToWallet(wallet);
-    }
-  }
+  // Removed resubscribe - handled by realtime service
 
   /**
-   * Subscribe to all user wallets
+   * Subscribe to all user wallets using batch subscription
    */
   async subscribeToAllUserWallets(): Promise<void> {
     try {
@@ -392,11 +270,14 @@ export class WebsocketBalanceSubscriber {
         return;
       }
 
-      logger.info('[WSS] Subscribing to all user wallets', { count: wallets.length });
+      const walletAddresses = wallets.map((w: any) => w.public_key);
+      logger.info('[WSS] Batch subscribing to all user wallets', { count: walletAddresses.length });
 
-      for (const wallet of wallets) {
-        await this.subscribeToWallet(wallet.public_key);
-      }
+      // Use batch subscription from realtime service
+      subscribeWalletsBatch(walletAddresses);
+      
+      // Track subscribed wallets
+      walletAddresses.forEach((addr: string) => this.subscribedWallets.add(addr));
     } catch (error) {
       logger.error('[WSS] Error subscribing to all user wallets', { error });
     }
@@ -407,12 +288,10 @@ export class WebsocketBalanceSubscriber {
    */
   getConnectionStatus(): {
     isConnected: boolean;
-    reconnectAttempts: number;
     subscribedWallets: number;
   } {
     return {
-      isConnected: this.isConnected,
-      reconnectAttempts: this.reconnectAttempts,
+      isConnected: isWsOpen(),
       subscribedWallets: this.subscribedWallets.size
     };
   }
@@ -421,15 +300,11 @@ export class WebsocketBalanceSubscriber {
    * Close WebSocket connection
    */
   close(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-    this.isConnected = false;
+    // The WebSocket is managed by solanaWs.ts, so we just clean up local state
     this.subscribedWallets.clear();
     this.subscriptionIds.clear();
     this.requestIdToWallet.clear();
-    logger.info('[WSS] WebSocket connection closed');
+    logger.info('[WSS] WebSocket subscriber cleaned up');
   }
 }
 

@@ -11,24 +11,22 @@ const router = Router();
 router.get('/websocket', authMiddleware, asyncHandler(async (req, res) => {
   try {
     const { websocketBalanceSubscriber } = await import('../services/WebsocketBalanceSubscriber');
+    const { getSubscriptionStatus } = await import('../services/realtime');
+    const { getWs, getQueueSize } = await import('../lib/solanaWs');
     
     // Check connection status
-    const stats = {
-      isConnected: websocketBalanceSubscriber['isConnected'],
-      subscribedWallets: Array.from(websocketBalanceSubscriber['subscribedWallets']),
-      subscriptionCount: websocketBalanceSubscriber['subscriptionIds'].size,
-      subscriptions: Array.from(websocketBalanceSubscriber['subscriptionIds'].entries()).map(([wallet, subId]) => ({
-        wallet,
-        subscriptionId: subId
-      }))
-    };
+    const stats = getSubscriptionStatus();
+    const status = websocketBalanceSubscriber.getConnectionStatus();
 
     res.json({
       success: true,
       message: 'WebSocket diagnostics',
       data: {
-        connectionStatus: stats.isConnected ? 'Connected ✅' : 'Not Connected ❌',
-        ...stats,
+        connectionStatus: status.isConnected ? 'Connected ✅' : 'Not Connected ❌',
+        isConnected: status.isConnected,
+        queueSize: getQueueSize(),
+        subscribedWallets: stats.subscribedWallets,
+        subscriptionCount: stats.subscriptionCount,
         timestamp: new Date().toISOString()
       }
     });
