@@ -1,6 +1,6 @@
 // Jupiter Ultra Swap API endpoints
-export const JUP_ULTRA_ORDER   = 'https://api.jup.ag/ultra/order';
-export const JUP_ULTRA_EXECUTE = 'https://api.jup.ag/ultra/execute';
+export const JUP_ULTRA_ORDER   = 'https://api.jup.ag/ultra/v1/order';
+export const JUP_ULTRA_EXECUTE = 'https://api.jup.ag/ultra/v1/execute';
 
 // Legacy v6 endpoints (fallback only)
 export const JUP_V6_QUOTE      = 'https://quote-api.jup.ag/v6/quote';
@@ -18,9 +18,10 @@ export function getJupiterHeaders(): Record<string, string> {
   };
 
   if (apiKey) {
-    headers['X-API-Key'] = apiKey;
+    headers['x-api-key'] = apiKey;  // ✅ Lowercase as per Jupiter spec
+    console.log('[Jupiter] ✅ Using API key:', `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`);
   } else {
-    console.warn('[Jupiter] JUPITER_API_KEY not configured - may hit rate limits');
+    console.error('[Jupiter] ❌ JUPITER_API_KEY not configured - requests will fail!');
   }
 
   return headers;
