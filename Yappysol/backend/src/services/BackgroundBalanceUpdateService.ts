@@ -6,7 +6,7 @@ import { TABLES } from '../lib/supabase';
 export class BackgroundBalanceUpdateService {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
-  private updateIntervalMs = 1800000; // 30 minutes (increased to avoid rate limits - WebSockets handle real-time updates)
+  private updateIntervalMs = 3600000; // 1 hour (WebSockets handle real-time updates, this is just for batch processing)
 
   constructor() {
     // Allow configuration via environment variable

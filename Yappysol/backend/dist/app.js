@@ -101,14 +101,15 @@ app.use('/api/wallet', walletBalance_1.default);
 const initializeServices = async () => {
     try {
         // Start background balance update service (if enabled)
-        const enableBackgroundBalanceUpdate = process.env.BACKGROUND_BALANCE_UPDATE !== 'false';
+        // Disabled by default to avoid rate limits - use WebSockets for real-time updates
+        const enableBackgroundBalanceUpdate = process.env.ENABLE_BACKGROUND_UPDATES === 'true';
         if (enableBackgroundBalanceUpdate) {
             const { backgroundBalanceUpdateService } = await Promise.resolve().then(() => __importStar(require('./services/BackgroundBalanceUpdateService')));
             backgroundBalanceUpdateService.start();
             console.log('✅ Background balance update service started');
         }
         else {
-            console.log('⏸️ Background balance update service disabled (BACKGROUND_BALANCE_UPDATE=false)');
+            console.log('⏸️ Background balance update service disabled (ENABLE_BACKGROUND_UPDATES=false)');
         }
         // Initialize WebSocket subscriber
         const { websocketBalanceSubscriber } = await Promise.resolve().then(() => __importStar(require('./services/WebsocketBalanceSubscriber')));
