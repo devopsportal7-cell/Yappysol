@@ -53,6 +53,7 @@ const heliusTest_1 = __importDefault(require("./routes/heliusTest"));
 const transactions_1 = __importDefault(require("./routes/transactions"));
 const portfolio_1 = __importDefault(require("./routes/portfolio"));
 const walletBalance_1 = __importDefault(require("./routes/walletBalance"));
+const activity_1 = __importDefault(require("./routes/activity"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // Initialize Moralis
@@ -97,6 +98,7 @@ app.use('/api/helius-test', heliusTest_1.default);
 app.use('/api/transactions', transactions_1.default);
 app.use('/api/portfolio', portfolio_1.default);
 app.use('/api/wallet', walletBalance_1.default);
+app.use('/api/activity', activity_1.default);
 // Initialize background services
 const initializeServices = async () => {
     try {

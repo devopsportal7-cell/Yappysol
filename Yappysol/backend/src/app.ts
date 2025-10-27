@@ -15,6 +15,7 @@ import heliusTestRoute from './routes/heliusTest';
 import transactionsRoutes from './routes/transactions';
 import portfolioRoutes from './routes/portfolio';
 import walletBalanceRoutes from './routes/walletBalance';
+import activityRoutes from './routes/activity';
 
 dotenv.config();
 
@@ -65,6 +66,7 @@ app.use('/api/helius-test', heliusTestRoute);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/wallet', walletBalanceRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Initialize background services
 const initializeServices = async () => {
