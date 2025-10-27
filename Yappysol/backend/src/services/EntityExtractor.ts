@@ -103,13 +103,17 @@ Return format: {"tokenName": "...", "tokenSymbol": "..."}`,
       price: `Extract price query entities from the user message. Return ONLY valid JSON, no markdown.
 
 Entities to extract:
-- tokenSymbol: Token to get price for
+- tokenSymbols: Array of all token symbols mentioned (can be multiple)
 
 Examples:
-"price of SOL" → {"tokenSymbol": "SOL"}
-"how much is BONK" → {"tokenSymbol": "BONK"}
+"price of SOL" → {"tokenSymbols": ["SOL"]}
+"how much is BONK" → {"tokenSymbols": ["BONK"]}
+"what is the price of bonk and sol" → {"tokenSymbols": ["BONK", "SOL"]}
+"price of SOL and BONK" → {"tokenSymbols": ["SOL", "BONK"]}
 
-Return format: {"tokenSymbol": "..."}`,
+IMPORTANT: Extract ALL mentioned tokens, not just one!
+
+Return format: {"tokenSymbols": ["TOKEN1", "TOKEN2", ...]}`,
 
       portfolio: `Extract portfolio query entities. Return ONLY valid JSON, no markdown.
 

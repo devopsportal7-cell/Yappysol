@@ -3,11 +3,11 @@ import OpenAI from 'openai';
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 export interface IntentResult {
-  intent: 'swap' | 'launch' | 'price' | 'portfolio' | 'trending' | 'general';
+  intent: 'swap' | 'launch' | 'price' | 'portfolio' | 'trending' | 'help' | 'general' | 'stop';
   confidence: number;
   entities: Record<string, any>;
   reasoning?: string;
-  isActionable: boolean; // NEW: distinguishes actionable vs question intents
+  isActionable: boolean;
 }
 
 export class IntentClassifier {
@@ -54,87 +54,43 @@ export class IntentClassifier {
       model: 'gpt-4o-mini',
       messages: [{
         role: 'system',
-        content: `You are an intent classifier for Yappysol, a Solana DeFi chatbot. Analyze user messages SEMANTICALLY - understand MEANING, not just keywords.
+        content: `You classify a user message for Yappy, a Solana DeFi copilot.
 
-CRITICAL: Use semantic understanding, not keyword matching!
-
-ACTIONABLE INTENTS (isActionable: true):
-- User wants to DO something NOW or GET their data
-- Imperative commands or direct requests
-- Examples: "swap SOL for USDC", "create a token called MyCoin", "what's in my wallet", "launch SuperToken"
-- PRICE queries are ACTIONABLE: "how much is solana", "what's the price of SOL", "price of USDC"
-
-QUESTION INTENTS (isActionable: false):
-- User is asking HOW/WHAT/WHY about GENERAL concepts (not their personal data or current prices)
-- Educational or informational queries about concepts
-- Examples: "how do I swap tokens?", "what is token launching?", "can you explain swapping?"
-
-SMART DISTINCTION - "What is my..." and Price queries:
-- "what is my portfolio" → PORTFOLIO intent (actionable: true) - User wants THEIR data
-- "what is my balance" → PORTFOLIO intent (actionable: true) - User wants THEIR data
-- "how much is solana" → PRICE intent (actionable: true) - User wants CURRENT price data
-- "what's the price of SOL" → PRICE intent (actionable: true) - User wants CURRENT price data
-- "what is a token launch" → GENERAL intent (actionable: false) - User asking about a concept
-- "what is swapping" → GENERAL intent (actionable: false) - User asking about a concept
-
-RULE: 
-- If "what is" + "my" → Always actionable (user wants their data)
-- If price-related + token name → Always actionable (user wants current price)
-- If "what is" + NO "my" + NO token name → Usually general question about concepts
-
-INTENTS (understand SEMANTICALLY, not just keywords):
-- swap: User wants to trade/exchange tokens OR learn how to swap (any phrasing: "swap", "convert", "trade", "exchange", "how do I swap", "how can I swap", "can you swap", "show me how to swap")
-- launch: User wants to create/mint a token OR learn how to create (any phrasing: "launch", "create", "make token", "mint", "how do I create a token", "how can I launch", "show me how to launch")
-- price: User asking about token price/market data
-- portfolio: User asking about THEIR OWN tokens/balance/holdings (variations: "my tokens", "what I have", "my balance", "portfolio", "holdings", "everything I own", "what's in my wallet")
-- trending: User asking about trending/popular tokens
-- general: General questions, help, greetings
-
-CRITICAL SWAP/LLaunch TUTORIAL DETECTION:
-- "how do I swap" → swap intent, actionable: true (user wants to learn HOW to use the swap feature)
-- "how can I swap" → swap intent, actionable: true
-- "can you swap" → swap intent, actionable: true
-- "how do I create a token" → launch intent, actionable: true (user wants to learn HOW to use the token creation feature)
-- "show me how to swap" → swap intent, actionable: true
-- These are NOT general questions - they are requests for guided tutorials within the chatbot
-
-PORTFOLIO INTENT EXAMPLES (understand all of these):
-- "what is my current portfolio" → PORTFOLIO, actionable: true (user wants THEIR data)
-- "what tokens do i own" → PORTFOLIO, actionable: true
-- "everything i have" → PORTFOLIO, actionable: true
-- "what's in my wallet" → PORTFOLIO, actionable: true
-- "show me what i own" → PORTFOLIO, actionable: true
-- "my balance" → PORTFOLIO, actionable: true
-- "my holdings" → PORTFOLIO, actionable: true
-- "what are my assets" → PORTFOLIO, actionable: true
-- Any question about user's personal tokens/balance
-
-PRICE INTENT EXAMPLES (understand all of these):
-- "how much is solana right now" → PRICE, actionable: true
-- "what's the price of SOL" → PRICE, actionable: true
-- "how much is BONK" → PRICE, actionable: true
-- "price of USDC" → PRICE, actionable: true
-- "what is BONK worth" → PRICE, actionable: true
-- "how much does SOL cost" → PRICE, actionable: true
-- Any question asking for CURRENT price of a token
-
-ENTITY EXTRACTION:
-For swap: fromToken, toToken, amount, slippage
-For launch: tokenName, tokenSymbol, description
-For price: tokenSymbol, timeframe
-For portfolio: timeframe
-For trending: timeframe, limit
-
-IMPORTANT: Use SEMANTIC understanding. Don't rely on exact keywords. Understand user intent.
-
-Return ONLY valid JSON, no markdown:
+Output JSON only:
 {
-  "intent": "swap|launch|price|portfolio|trending|general",
-  "confidence": 0.0-1.0,
+  "intent": "swap|launch|price|portfolio|trending|help|general|stop",
+  "confidence": 0.00-1.00,
   "entities": {},
-  "reasoning": "brief explanation",
-  "isActionable": true|false
-}`
+  "isActionable": true|false,
+  "reason": "1 short user-facing sentence"
+}
+
+Rules (semantic > keywords):
+- actionable: user wants to DO something or GET personal/current data now.
+- "what is my ...", "show my ..." ⇒ portfolio (actionable:true)
+- token price queries ⇒ price (actionable:true)
+- "how do I ..." ⇒ help (actionable:true) + helpFor
+- greetings ⇒ general
+- "stop", "cancel", "pause", "wait" ⇒ stop
+
+Intent semantics:
+- swap: convert/trade/buy/sell tokens
+- launch: create/mint a token
+- price: current market price queries
+- portfolio: user's assets/balance/history
+- trending: popular movers
+- help: guided how-to for an action
+- general: chit-chat or concepts
+- stop: interrupt/cancel flows
+
+Entities (best effort):
+- swap: {fromToken?, toToken?, amount?, slippage?}
+- launch: {tokenName?, tokenSymbol?, description?}
+- price: {tokenSymbols:[...]}
+- trending: {limit?}
+- help: {helpFor: "swap|launch|portfolio|price|trending"}
+
+No chain-of-thought. Semantic first.`
       }, {
         role: 'user',
         content: message

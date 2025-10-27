@@ -220,6 +220,40 @@ class ChatService {
         const lowerMessage = message.toLowerCase();
         return createKeywords.some(keyword => lowerMessage.includes(keyword));
     }
+    /**
+     * Check if a message is likely a valid response to the current step
+     * This prevents false positives when detecting interruptions
+     */
+    isLikelyStepResponse(message, currentStep) {
+        const lowerMessage = message.toLowerCase();
+        // Step-specific validation
+        switch (currentStep) {
+            case 'twitter':
+            case 'telegram':
+            case 'website':
+                // URLs or "skip" are valid responses
+                return /^https?:\/\//.test(message) || lowerMessage === 'skip';
+            case 'description':
+                // Any text longer than 5 chars is likely a description
+                return message.length > 5;
+            case 'name':
+                // Any text 2-50 chars is likely a name
+                return message.length >= 2 && message.length <= 50;
+            case 'symbol':
+                // Uppercase letters/numbers are valid
+                return /^[A-Z0-9]{2,10}$/.test(message.toUpperCase()) ||
+                    /^[A-Za-z0-9]{2,10}$/.test(message);
+            case 'amount':
+                // Numbers are valid
+                return !isNaN(parseFloat(message));
+            default:
+                // For other steps, check if it looks like a valid response
+                // (not starting with question words, not asking for something)
+                const isQuestion = /^(what|where|when|how|why|who|which|is|are|can|could|would|should)/i.test(message);
+                const isAskingForSomething = /\b(show|get|tell|give)\b/i.test(message);
+                return !isQuestion && !isAskingForSomething && message.length > 1;
+        }
+    }
     isGeneralTradingQuestion(message) {
         const tradingKeywords = [
             'should i buy',
@@ -520,45 +554,110 @@ Be enthusiastic about the Solana ecosystem!`;
                 }
             }
             // 🔧 FIX: Check if user is interrupting the flow with a different intent
+            // Only check for interruption if we have a current step
+            let isInterrupting = false;
             if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
-                // Detect if user is asking for something completely different
+                // Use AI to determine if this is actually an interruption or a valid step response
                 const isPortfolioQueryNow = this.isPortfolioQuery(message);
                 const isPriceQueryNow = this.isPriceQuery(message);
                 const isSwapIntentNow = this.isSwapIntent(message);
                 const isCreateTokenIntentNow = this.isCreateTokenIntent(message);
                 const isTrendingQueryNow = this.isTrendingQuery(message);
-                // If user wants to do something different (not continue the flow), reset the context
+                // Check if this is likely a step response (contains words that would be part of normal flow)
+                const isLikelyStepResponse = this.isLikelyStepResponse(message, context.currentStep);
+                // Only consider it an interruption if:
+                // 1. It's a clear different intent (portfolio, price, swap, etc.)
+                // 2. AND it's NOT likely a valid step response
                 if (isPortfolioQueryNow || isPriceQueryNow || isSwapIntentNow || isCreateTokenIntentNow || isTrendingQueryNow) {
-                    console.log('[chatWithOpenAI] 🔄 User interrupting flow with different intent - resetting context');
-                    context.currentStep = null;
-                    context.flowType = null;
-                    // Continue with fresh intent detection below
+                    if (!isLikelyStepResponse) {
+                        isInterrupting = true;
+                        console.log('[chatWithOpenAI] Detected clear interruption intent');
+                    }
+                    else {
+                        console.log('[chatWithOpenAI] Matches intent but seems like valid step response, not interrupting');
+                    }
                 }
-                else {
-                    // Continue with step flow
-                    console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
-                    console.log('[chatWithOpenAI] Step flow context:', JSON.stringify(context, null, 2));
-                    // Re-extract entities from the current message to enhance context
+            }
+            if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined && !isInterrupting) {
+                // Continue with step flow (only if not interrupting)
+                console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
+                console.log('[chatWithOpenAI] Step flow context:', JSON.stringify(context, null, 2));
+                // Re-extract entities from the current message to enhance context
+                try {
+                    console.log('[chatWithOpenAI] Re-extracting entities for step continuation...');
+                    const reExtractedEntities = await this.entityExtractor.extractEntities(message, 'swap');
+                    console.log('[chatWithOpenAI] Re-extracted entities:', reExtractedEntities);
+                    // Merge re-extracted entities into context (don't overwrite existing ones)
+                    Object.keys(reExtractedEntities).forEach(key => {
+                        if (reExtractedEntities[key] && !context[key]) {
+                            context[key] = reExtractedEntities[key];
+                            console.log(`[chatWithOpenAI] Added ${key}: ${reExtractedEntities[key]} to context`);
+                        }
+                    });
+                }
+                catch (error) {
+                    console.error('[chatWithOpenAI] Error re-extracting entities:', error);
+                    // Continue without re-extraction
+                }
+                // Determine which service to route to based on the step AND flow type
+                // Check for swap flow first (more specific steps)
+                if (context.currentStep === 'fromToken' || context.currentStep === 'toToken') {
+                    console.log('[chatWithOpenAI] Routing to: swap service (step continuation)');
                     try {
-                        console.log('[chatWithOpenAI] Re-extracting entities for step continuation...');
-                        const reExtractedEntities = await this.entityExtractor.extractEntities(message, 'swap');
-                        console.log('[chatWithOpenAI] Re-extracted entities:', reExtractedEntities);
-                        // Merge re-extracted entities into context (don't overwrite existing ones)
-                        Object.keys(reExtractedEntities).forEach(key => {
-                            if (reExtractedEntities[key] && !context[key]) {
-                                context[key] = reExtractedEntities[key];
-                                console.log(`[chatWithOpenAI] Added ${key}: ${reExtractedEntities[key]} to context`);
-                            }
-                        });
+                        const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
+                        return {
+                            prompt: swapResult.prompt,
+                            step: swapResult.step,
+                            action: 'swap',
+                            flowType: 'swap',
+                            unsignedTransaction: swapResult.unsignedTransaction,
+                            requireSignature: swapResult.requireSignature,
+                            swapDetails: swapResult.swapDetails
+                        };
                     }
                     catch (error) {
-                        console.error('[chatWithOpenAI] Error re-extracting entities:', error);
-                        // Continue without re-extraction
+                        console.error('[chatWithOpenAI] Error in swap step continuation:', error);
+                        return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
                     }
-                    // Determine which service to route to based on the step AND flow type
-                    // Check for swap flow first (more specific steps)
-                    if (context.currentStep === 'fromToken' || context.currentStep === 'toToken') {
-                        console.log('[chatWithOpenAI] Routing to: swap service (step continuation)');
+                }
+                // Check for token creation steps (more specific steps first)
+                if (context.currentStep === 'image' || context.currentStep === 'name' ||
+                    context.currentStep === 'symbol' || context.currentStep === 'description' ||
+                    context.currentStep === 'twitter' || context.currentStep === 'telegram' ||
+                    context.currentStep === 'website' || context.currentStep === 'pool') {
+                    console.log('[chatWithOpenAI] Routing to: token creation service (step continuation)');
+                    try {
+                        const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
+                        if (!creationResult) {
+                            return { prompt: 'Token creation process interrupted. Please start over.', step: null };
+                        }
+                        return {
+                            prompt: creationResult.prompt,
+                            step: creationResult.step,
+                            action: 'create-token',
+                            flowType: 'token-creation',
+                            unsignedTransaction: creationResult.unsignedTransaction,
+                            requireSignature: creationResult.requireSignature,
+                            tokenDetails: creationResult.tokenDetails
+                        };
+                    }
+                    catch (error) {
+                        console.error('[chatWithOpenAI] Error in token creation step continuation:', error);
+                        return { prompt: 'Sorry, I encountered an error processing your token creation request. Please try again.', step: null };
+                    }
+                }
+                // Handle shared steps (amount, confirmation) based on flow context
+                if (context.currentStep === 'amount' || context.currentStep === 'confirmation') {
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - Current step:', context.currentStep);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - flowType:', context.flowType);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - fromToken:', context.fromToken);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - toToken:', context.toToken);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - tokenName:', context.tokenName);
+                    console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - tokenSymbol:', context.tokenSymbol);
+                    // Check if we have flow context to determine which service to use
+                    // PRIORITY: Explicit flowType first, then context clues
+                    if (context.flowType === 'swap' || (context.fromToken || context.toToken)) {
+                        console.log('[chatWithOpenAI] Routing to: swap service (shared step - swap context)');
                         try {
                             const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
                             return {
@@ -576,12 +675,8 @@ Be enthusiastic about the Solana ecosystem!`;
                             return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
                         }
                     }
-                    // Check for token creation steps (more specific steps first)
-                    if (context.currentStep === 'image' || context.currentStep === 'name' ||
-                        context.currentStep === 'symbol' || context.currentStep === 'description' ||
-                        context.currentStep === 'twitter' || context.currentStep === 'telegram' ||
-                        context.currentStep === 'website' || context.currentStep === 'pool') {
-                        console.log('[chatWithOpenAI] Routing to: token creation service (step continuation)');
+                    else if (context.flowType === 'token-creation' || context.tokenName || context.tokenSymbol) {
+                        console.log('[chatWithOpenAI] Routing to: token creation service (shared step - creation context)');
                         try {
                             const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
                             if (!creationResult) {
@@ -591,7 +686,6 @@ Be enthusiastic about the Solana ecosystem!`;
                                 prompt: creationResult.prompt,
                                 step: creationResult.step,
                                 action: 'create-token',
-                                flowType: 'token-creation',
                                 unsignedTransaction: creationResult.unsignedTransaction,
                                 requireSignature: creationResult.requireSignature,
                                 tokenDetails: creationResult.tokenDetails
@@ -602,64 +696,19 @@ Be enthusiastic about the Solana ecosystem!`;
                             return { prompt: 'Sorry, I encountered an error processing your token creation request. Please try again.', step: null };
                         }
                     }
-                    // Handle shared steps (amount, confirmation) based on flow context
-                    if (context.currentStep === 'amount' || context.currentStep === 'confirmation') {
-                        console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - Current step:', context.currentStep);
-                        console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - flowType:', context.flowType);
-                        console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - fromToken:', context.fromToken);
-                        console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - toToken:', context.toToken);
-                        console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - tokenName:', context.tokenName);
-                        console.log('[chatWithOpenAI] 🔍 SHARED STEP DEBUG - tokenSymbol:', context.tokenSymbol);
-                        // Check if we have flow context to determine which service to use
-                        // PRIORITY: Explicit flowType first, then context clues
-                        if (context.flowType === 'swap' || (context.fromToken || context.toToken)) {
-                            console.log('[chatWithOpenAI] Routing to: swap service (shared step - swap context)');
-                            try {
-                                const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
-                                return {
-                                    prompt: swapResult.prompt,
-                                    step: swapResult.step,
-                                    action: 'swap',
-                                    flowType: 'swap',
-                                    unsignedTransaction: swapResult.unsignedTransaction,
-                                    requireSignature: swapResult.requireSignature,
-                                    swapDetails: swapResult.swapDetails
-                                };
-                            }
-                            catch (error) {
-                                console.error('[chatWithOpenAI] Error in swap step continuation:', error);
-                                return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
-                            }
-                        }
-                        else if (context.flowType === 'token-creation' || context.tokenName || context.tokenSymbol) {
-                            console.log('[chatWithOpenAI] Routing to: token creation service (shared step - creation context)');
-                            try {
-                                const creationResult = await this.tokenCreationService.handleCreationIntent(message, context);
-                                if (!creationResult) {
-                                    return { prompt: 'Token creation process interrupted. Please start over.', step: null };
-                                }
-                                return {
-                                    prompt: creationResult.prompt,
-                                    step: creationResult.step,
-                                    action: 'create-token',
-                                    unsignedTransaction: creationResult.unsignedTransaction,
-                                    requireSignature: creationResult.requireSignature,
-                                    tokenDetails: creationResult.tokenDetails
-                                };
-                            }
-                            catch (error) {
-                                console.error('[chatWithOpenAI] Error in token creation step continuation:', error);
-                                return { prompt: 'Sorry, I encountered an error processing your token creation request. Please try again.', step: null };
-                            }
-                        }
-                        else {
-                            // No clear context, try to determine from the original message
-                            console.log('[chatWithOpenAI] No clear flow context for shared step, falling back to intent detection');
-                            console.warn('[chatWithOpenAI] Step continuation without recognized flowType - this may cause routing issues');
-                            // Fall through to intent detection below
-                        }
+                    else {
+                        // No clear context, try to determine from the original message
+                        console.log('[chatWithOpenAI] No clear flow context for shared step, falling back to intent detection');
+                        console.warn('[chatWithOpenAI] Step continuation without recognized flowType - this may cause routing issues');
+                        // Fall through to intent detection below
                     }
-                } // Close the else block for step continuation
+                }
+                return; // Exit early after handling step continuation
+            }
+            if (isInterrupting) {
+                console.log('[chatWithOpenAI] 🔄 User interrupting flow with different intent - resetting context');
+                context.currentStep = null;
+                context.flowType = null;
             }
             // === INTELLIGENT INTENT CLASSIFICATION ===
             // Use AI-powered classification to understand natural language
@@ -969,6 +1018,131 @@ You'll sign transactions to create the token and optionally set up a liquidity p
                                 // Fall through to keyword matching
                             }
                             break;
+                        }
+                        case 'help': {
+                            console.log('[chatWithOpenAI] AI-routed to: help service');
+                            // Extract what they need help with
+                            const helpFor = entities.helpFor || 'general';
+                            const helpPrompts = {
+                                'swap': `🔄 **How to Swap Tokens**
+
+I can help you swap tokens right here in this chat!
+
+**Simple Method:**
+Just tell me what you want: "swap 1 SOL for USDC"
+
+**I'll guide you through:**
+1. Confirm the token pair
+2. Enter the amount
+3. Review the transaction details
+4. Sign with your wallet
+
+**Example commands:**
+- "swap 0.5 SOL for USDC"
+- "trade 100 USDC for BONK"
+- "convert my SOL to WIF"`,
+                                'launch': `🚀 **How to Create a Token**
+
+I can help you launch your own Solana token!
+
+**Simple Method:**
+Tell me about your token: "create a token called MyToken"
+
+**I'll guide you through:**
+1. Token name and symbol
+2. Description and metadata
+3. Social links (optional)
+4. Liquidity pool setup
+5. Launch with initial liquidity
+
+**Example commands:**
+- "create a token called SuperCoin"
+- "launch MyToken with ticker MTK"
+- "I want to create a memecoin"`,
+                                'portfolio': `📊 **How to Check Your Portfolio**
+
+Your portfolio shows all tokens in your wallet!
+
+**Simple Commands:**
+- "what's in my wallet"
+- "show my portfolio"
+- "my balance"
+
+**I'll show you:**
+- All tokens you hold
+- Current prices in SOL and USD
+- Total portfolio value
+- Links to view on Solscan`,
+                                'price': `💰 **How to Check Token Prices**
+
+Get real-time prices for any Solana token!
+
+**Simple Commands:**
+- "how much is SOL"
+- "what's the price of BONK"
+- "price of USDC"
+
+**I'll show you:**
+- Current USD price
+- 24h price change
+- Compare multiple tokens
+- Quick Solscan links`,
+                                'trending': `🔥 **How to Find Trending Tokens**
+
+Discover what's hot on Solana!
+
+**Simple Commands:**
+- "show trending tokens"
+- "what's hot right now"
+- "popular tokens"
+
+**I'll show you:**
+- Top gaining tokens
+- Volume leaders
+- Price movements
+- Quick trading links`,
+                                'general': `🤖 **How to Use Yappysol**
+
+I'm your AI assistant for Solana DeFi!
+
+**What I can do:**
+- 🔄 Swap tokens
+- 🚀 Create your own token
+- 📊 View your portfolio
+- 💰 Check token prices
+- 🔥 Find trending tokens
+
+**Just ask me:**
+- "create a token called MyToken"
+- "swap 1 SOL for USDC"
+- "what's in my wallet"
+- "how much is BONK"
+- "show trending tokens"
+
+**Need help?** Just ask "how do I..." and I'll guide you!`
+                            };
+                            return {
+                                prompt: helpPrompts[helpFor] || helpPrompts['general'],
+                                action: 'help',
+                                actionData: { helpFor }
+                            };
+                        }
+                        case 'stop': {
+                            console.log('[chatWithOpenAI] AI-routed to: stop service');
+                            // Check if there's an active flow to stop
+                            if (context.currentStep) {
+                                return {
+                                    prompt: 'I\'ve paused the current flow. Say "continue" to resume, or start a new action.',
+                                    action: 'pause',
+                                    shouldPause: true
+                                };
+                            }
+                            else {
+                                return {
+                                    prompt: 'There\'s no active flow to pause. How can I help you?',
+                                    action: 'no-op'
+                                };
+                            }
                         }
                     }
                 }

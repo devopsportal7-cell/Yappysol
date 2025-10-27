@@ -151,31 +151,76 @@ export class UserPortfolioService {
         return 'Your portfolio is currently empty. Consider adding some tokens!';
       }
       
-      // Calculate totals
-      const totalSolValue = tokens.reduce((sum, t) => {
-        if (t.symbol === 'SOL') return sum + t.balance;
-        return sum + (t.balanceUsd / t.price);
-      }, 0);
+      // Import and use PortfolioInsightsService
+      const { portfolioInsightsService } = await import('./PortfolioInsightsService');
       
-      const totalUsdValue = tokens.reduce((sum, t) => sum + t.balanceUsd, 0);
+      // Convert tokens to TokenBalance format
+      const tokenBalances = tokens.map(t => ({
+        mint: t.mint,
+        symbol: t.symbol,
+        name: t.symbol, // Use symbol as name fallback
+        accountUnit: t.mint,
+        uiAmount: t.balance,
+        priceUsd: t.price,
+        solEquivalent: t.balance * t.price / 194, // Approximate SOL price
+        usdEquivalent: t.balanceUsd,
+        image: t.image,
+        solscanUrl: t.solscanUrl,
+        decimals: 9
+      }));
       
-      // Generate AI analysis
-      const summary = `
-**📊 Portfolio Summary:**
-- **Holdings:** ${tokens.length} tokens
-- **Total SOL Value:** ${totalSolValue.toFixed(4)} SOL
-- **Total USD Value:** $${totalUsdValue.toFixed(2)}
-
-**Insights:**
-${tokens.length === 1 && tokens[0].symbol === 'SOL' ? '👋 You\'re holding native SOL - the backbone of Solana! This is a solid, safe position.' : ''}
-${tokens.length > 5 ? '🎯 You have good diversification across multiple tokens.' : ''}
-${totalUsdValue > 1000 ? '💰 Your portfolio value is substantial. Consider risk management strategies.' : '🏦 Your portfolio is growing. Keep learning about DeFi opportunities!'}
-`;
+      const insights = await portfolioInsightsService.generateInsights(tokenBalances);
+      
+      // Build comprehensive analysis
+      let summary = `**📊 Portfolio Summary:**\n`;
+      summary += `- **Holdings:** ${insights.summary.totalTokens} tokens\n`;
+      summary += `- **Total SOL Value:** ${insights.summary.totalSolValue.toFixed(4)} SOL\n`;
+      summary += `- **Total USD Value:** $${insights.summary.totalUsdValue.toFixed(2)}\n`;
+      summary += `- **Largest Holding:** ${insights.summary.largestHolding.symbol} (${insights.summary.largestHolding.percentage.toFixed(1)}%)\n\n`;
+      
+      summary += `**🎯 Diversification:** ${insights.diversification.category.toUpperCase()} (${insights.diversification.score}/100)\n`;
+      summary += `${insights.diversification.analysis}\n\n`;
+      
+      if (insights.diversification.suggestions.length > 0) {
+        summary += `**💡 Suggestions:**\n`;
+        insights.diversification.suggestions.forEach(s => {
+          summary += `- ${s}\n`;
+        });
+        summary += `\n`;
+      }
+      
+      summary += `**⚠️ Risk Assessment:** ${insights.risk.overallRisk.toUpperCase()}\n`;
+      summary += `${insights.risk.explanation}\n\n`;
+      
+      if (insights.risk.factors.length > 0) {
+        summary += `**Risk Factors:**\n`;
+        insights.risk.factors.forEach(f => {
+          summary += `- ${f.type}: ${f.description} (${f.severity})\n`;
+        });
+        summary += `\n`;
+      }
+      
+      if (insights.recommendations.length > 0) {
+        summary += `**🎯 Recommendations:**\n`;
+        insights.recommendations.forEach((r, i) => {
+          summary += `${i + 1}. **[${r.priority.toUpperCase()}]** ${r.title}: ${r.description}\n`;
+          if (r.action) {
+            summary += `   → ${r.action}\n`;
+          }
+        });
+      }
       
       return summary;
     } catch (e) {
       console.error('[UserPortfolioService] Error generating analysis:', e);
-      return '';
+      // Fallback to basic analysis
+      const tokens = await this.getUserPortfolioWithMetadata(walletAddress);
+      if (!tokens || tokens.length === 0) {
+        return 'Your portfolio is currently empty. Consider adding some tokens!';
+      }
+      
+      const totalUsdValue = tokens.reduce((sum, t) => sum + t.balanceUsd, 0);
+      return `**Portfolio Summary:** ${tokens.length} tokens, total value $${totalUsdValue.toFixed(2)} USD`;
     }
   }
 

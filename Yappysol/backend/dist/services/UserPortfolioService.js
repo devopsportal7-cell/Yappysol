@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -141,30 +174,67 @@ class UserPortfolioService {
             if (!tokens || tokens.length === 0) {
                 return 'Your portfolio is currently empty. Consider adding some tokens!';
             }
-            // Calculate totals
-            const totalSolValue = tokens.reduce((sum, t) => {
-                if (t.symbol === 'SOL')
-                    return sum + t.balance;
-                return sum + (t.balanceUsd / t.price);
-            }, 0);
-            const totalUsdValue = tokens.reduce((sum, t) => sum + t.balanceUsd, 0);
-            // Generate AI analysis
-            const summary = `
-**📊 Portfolio Summary:**
-- **Holdings:** ${tokens.length} tokens
-- **Total SOL Value:** ${totalSolValue.toFixed(4)} SOL
-- **Total USD Value:** $${totalUsdValue.toFixed(2)}
-
-**Insights:**
-${tokens.length === 1 && tokens[0].symbol === 'SOL' ? '👋 You\'re holding native SOL - the backbone of Solana! This is a solid, safe position.' : ''}
-${tokens.length > 5 ? '🎯 You have good diversification across multiple tokens.' : ''}
-${totalUsdValue > 1000 ? '💰 Your portfolio value is substantial. Consider risk management strategies.' : '🏦 Your portfolio is growing. Keep learning about DeFi opportunities!'}
-`;
+            // Import and use PortfolioInsightsService
+            const { portfolioInsightsService } = await Promise.resolve().then(() => __importStar(require('./PortfolioInsightsService')));
+            // Convert tokens to TokenBalance format
+            const tokenBalances = tokens.map(t => ({
+                mint: t.mint,
+                symbol: t.symbol,
+                name: t.symbol, // Use symbol as name fallback
+                accountUnit: t.mint,
+                uiAmount: t.balance,
+                priceUsd: t.price,
+                solEquivalent: t.balance * t.price / 194, // Approximate SOL price
+                usdEquivalent: t.balanceUsd,
+                image: t.image,
+                solscanUrl: t.solscanUrl,
+                decimals: 9
+            }));
+            const insights = await portfolioInsightsService.generateInsights(tokenBalances);
+            // Build comprehensive analysis
+            let summary = `**📊 Portfolio Summary:**\n`;
+            summary += `- **Holdings:** ${insights.summary.totalTokens} tokens\n`;
+            summary += `- **Total SOL Value:** ${insights.summary.totalSolValue.toFixed(4)} SOL\n`;
+            summary += `- **Total USD Value:** $${insights.summary.totalUsdValue.toFixed(2)}\n`;
+            summary += `- **Largest Holding:** ${insights.summary.largestHolding.symbol} (${insights.summary.largestHolding.percentage.toFixed(1)}%)\n\n`;
+            summary += `**🎯 Diversification:** ${insights.diversification.category.toUpperCase()} (${insights.diversification.score}/100)\n`;
+            summary += `${insights.diversification.analysis}\n\n`;
+            if (insights.diversification.suggestions.length > 0) {
+                summary += `**💡 Suggestions:**\n`;
+                insights.diversification.suggestions.forEach(s => {
+                    summary += `- ${s}\n`;
+                });
+                summary += `\n`;
+            }
+            summary += `**⚠️ Risk Assessment:** ${insights.risk.overallRisk.toUpperCase()}\n`;
+            summary += `${insights.risk.explanation}\n\n`;
+            if (insights.risk.factors.length > 0) {
+                summary += `**Risk Factors:**\n`;
+                insights.risk.factors.forEach(f => {
+                    summary += `- ${f.type}: ${f.description} (${f.severity})\n`;
+                });
+                summary += `\n`;
+            }
+            if (insights.recommendations.length > 0) {
+                summary += `**🎯 Recommendations:**\n`;
+                insights.recommendations.forEach((r, i) => {
+                    summary += `${i + 1}. **[${r.priority.toUpperCase()}]** ${r.title}: ${r.description}\n`;
+                    if (r.action) {
+                        summary += `   → ${r.action}\n`;
+                    }
+                });
+            }
             return summary;
         }
         catch (e) {
             console.error('[UserPortfolioService] Error generating analysis:', e);
-            return '';
+            // Fallback to basic analysis
+            const tokens = await this.getUserPortfolioWithMetadata(walletAddress);
+            if (!tokens || tokens.length === 0) {
+                return 'Your portfolio is currently empty. Consider adding some tokens!';
+            }
+            const totalUsdValue = tokens.reduce((sum, t) => sum + t.balanceUsd, 0);
+            return `**Portfolio Summary:** ${tokens.length} tokens, total value $${totalUsdValue.toFixed(2)} USD`;
         }
     }
     async getUserPortfolioWithMetadata(walletAddress) {

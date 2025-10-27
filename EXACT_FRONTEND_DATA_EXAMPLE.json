@@ -1,0 +1,139 @@
+{
+  "message": "Here are the assets in your wallet (7Ta9Z4r1VXFYgG9iDZLEajCk3zVHih3jTw5kKwNau1FQ):\n\n**SOL** (Native Solana)\n![SOL](https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png)\nBalance: 1.2345 SOL\nPrice: $194.03 USD\nValue: $239.56 USD\n\n\n**USDC**\n![USDC](https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png)\nBalance: 1000.0000 USDC\nPrice: $1.00 USD\nValue: $1000.00 USD\n[View on Solscan](https://solscan.io/token/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)\n\n\n**BONK**\n![BONK](https://arweave.net/hBt0gOzAXC5W1HOqxLEC0hP9qSHO3BEO1zSkG2_f1sk)\nBalance: 5000.1234 BONK\nPrice: $0.0002 USD\nValue: $1.00 USD\n[View on Solscan](https://solscan.io/token/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263)\n\n\n",
+  "action": "portfolio",
+  "actionData": {
+    "totalSolValue": 5.1751,
+    "totalUsdValue": 1239.56,
+    "tokens": [
+      {
+        "mint": "So11111111111111111111111111111111111111112",
+        "symbol": "SOL",
+        "name": "Solana",
+        "accountUnit": "1234500000",
+        "uiAmount": 1.2345,
+        "priceUsd": 194.03,
+        "solEquivalent": 1.2345,
+        "usdEquivalent": 239.56,
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+        "solscanUrl": "https://solscan.io/token/So11111111111111111111111111111111111111112",
+        "decimals": 9
+      },
+      {
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "accountUnit": "1000000000",
+        "uiAmount": 1000.0,
+        "priceUsd": 1.00,
+        "solEquivalent": 5.1551,
+        "usdEquivalent": 1000.00,
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+        "solscanUrl": "https://solscan.io/token/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "decimals": 6
+      },
+      {
+        "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        "symbol": "BONK",
+        "name": "Bonk",
+        "accountUnit": "50001234000",
+        "uiAmount": 5000.1234,
+        "priceUsd": 0.0002,
+        "solEquivalent": 0.0257,
+        "usdEquivalent": 1.00,
+        "image": "https://arweave.net/hBt0gOzAXC5W1HOqxLEC0hP9qSHO3BEO1zSkG2_f1sk",
+        "solscanUrl": "https://solscan.io/token/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        "decimals": 5
+      }
+    ]
+  },
+  "entities": {
+    "walletAddress": "7Ta9Z4r1VXFYgG9iDZLEajCk3zVHih3jTw5kKwNau1FQ",
+    "portfolioData": {
+      "totalSolValue": 5.1751,
+      "totalUsdValue": 1239.56,
+      "tokens": [
+        {
+          "mint": "So11111111111111111111111111111111111111112",
+          "symbol": "SOL",
+          "name": "Solana",
+          "accountUnit": "1234500000",
+          "uiAmount": 1.2345,
+          "priceUsd": 194.03,
+          "solEquivalent": 1.2345,
+          "usdEquivalent": 239.56,
+          "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+          "solscanUrl": "https://solscan.io/token/So11111111111111111111111111111111111111112",
+          "decimals": 9
+        },
+        {
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "accountUnit": "1000000000",
+          "uiAmount": 1000.0,
+          "priceUsd": 1.00,
+          "solEquivalent": 5.1551,
+          "usdEquivalent": 1000.00,
+          "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+          "solscanUrl": "https://solscan.io/token/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6
+        },
+        {
+          "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+          "symbol": "BONK",
+          "name": "Bonk",
+          "accountUnit": "50001234000",
+          "uiAmount": 5000.1234,
+          "priceUsd": 0.0002,
+          "solEquivalent": 0.0257,
+          "usdEquivalent": 1.00,
+          "image": "https://arweave.net/hBt0gOzAXC5W1HOqxLEC0hP9qSHO3BEO1zSkG2_f1sk",
+          "solscanUrl": "https://solscan.io/token/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+          "decimals": 5
+        }
+      ]
+    },
+    "tokens": [
+      {
+        "mint": "So11111111111111111111111111111111111111112",
+        "symbol": "SOL",
+        "name": "Solana",
+        "accountUnit": "1234500000",
+        "uiAmount": 1.2345,
+        "priceUsd": 194.03,
+        "solEquivalent": 1.2345,
+        "usdEquivalent": 239.56,
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+        "solscanUrl": "https://solscan.io/token/So11111111111111111111111111111111111111112",
+        "decimals": 9
+      },
+      {
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "accountUnit": "1000000000",
+        "uiAmount": 1000.0,
+        "priceUsd": 1.00,
+        "solEquivalent": 5.1551,
+        "usdEquivalent": 1000.00,
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+        "solscanUrl": "https://solscan.io/token/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "decimals": 6
+      },
+      {
+        "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        "symbol": "BONK",
+        "name": "Bonk",
+        "accountUnit": "50001234000",
+        "uiAmount": 5000.1234,
+        "priceUsd": 0.0002,
+        "solEquivalent": 0.0257,
+        "usdEquivalent": 1.00,
+        "image": "https://arweave.net/hBt0gOzAXC5W1HOqxLEC0hP9qSHO3BEO1zSkG2_f1sk",
+        "solscanUrl": "https://solscan.io/token/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        "decimals": 5
+      }
+    ]
+  }
+}
+

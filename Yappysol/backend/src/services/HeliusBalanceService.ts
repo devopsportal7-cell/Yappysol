@@ -66,13 +66,30 @@ export class HeliusBalanceService {
 
       const processedTokens = [];
 
+      // Add native SOL as first token if balance > 0
+      if (solBalance > 0) {
+        processedTokens.push({
+          mint: 'So11111111111111111111111111111111111111112',
+          symbol: 'SOL',
+          name: 'Solana',
+          accountUnit: String(Math.round(solBalance * 1e9)),
+          uiAmount: solBalance,
+          priceUsd: solPrice,
+          solEquivalent: solBalance,
+          usdEquivalent: solBalance * solPrice,
+          image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+          solscanUrl: 'https://solscan.io/token/So11111111111111111111111111111111111111112',
+          decimals: 9
+        });
+      }
+
       // Ensure tokenBalances is iterable
       if (!Array.isArray(tokenBalances)) {
         logger.warn('[HELIUS] tokenBalances is not iterable', { tokenBalances, walletAddress });
         return {
           totalSolValue: solBalance,
-          totalUsdValue: solBalance * 100, // Fallback USD calculation
-          tokens: []
+          totalUsdValue: solBalance * solPrice,
+          tokens: processedTokens
         };
       }
 
