@@ -62,6 +62,11 @@ const COMMON_TOKENS: { [key: string]: string } = {
   'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   'RAY': '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
   'SRM': 'SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt',
+  'WIF': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  'JUP': 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  'JTO': 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL',
+  'PYTH': 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3',
+  'SAMO': '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
 };
 
 export class TokenPriceService {
@@ -71,37 +76,70 @@ export class TokenPriceService {
     this.network = 'mainnet';
   }
 
-  private getTokenAddressFromQuery(query: string): string | null {
-    // Convert query to uppercase for case-insensitive matching
-    const upperQuery = query.toUpperCase();
-    
-    // Check for common token symbols
-    for (const [symbol, address] of Object.entries(COMMON_TOKENS)) {
-      if (upperQuery.includes(symbol)) {
-        return address;
-      }
-    }
-
-    // If no common token found, check if the query contains a Solana address
-    const solanaAddressRegex = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
-    const match = query.match(solanaAddressRegex);
-    return match ? match[0] : null;
+  // Get token address from symbol
+  getTokenAddress(symbol: string): string | null {
+    const upperSymbol = symbol.toUpperCase();
+    return COMMON_TOKENS[upperSymbol] || null;
   }
 
+  // Get all recognized tokens
+  getAllTokenSymbols(): string[] {
+    return Object.keys(COMMON_TOKENS);
+  }
+
+  // Fetch price for a single token
+  async getTokenPriceWithMetadata(tokenAddress: string): Promise<PriceInfo> {
+    try {
+      const [price, metadata] = await Promise.all([
+        this.getTokenPrice(tokenAddress),
+        this.getTokenMetadata(tokenAddress),
+      ]);
+
+      return {
+        ...price,
+        ...metadata,
+      };
+    } catch (error) {
+      console.error('Error fetching token price and metadata:', error);
+      throw new Error('Failed to fetch token price and metadata');
+    }
+  }
+
+  // Fetch prices for multiple tokens
+  async getMultipleTokenPrices(symbols: string[]): Promise<PriceInfo[]> {
+    const addresses = symbols
+      .map(symbol => this.getTokenAddress(symbol))
+      .filter(addr => addr !== null) as string[];
+
+    const prices = await Promise.all(
+      addresses.map(addr => this.getTokenPriceWithMetadata(addr))
+    );
+
+    return prices;
+  }
+
+  // Legacy method for backwards compatibility
   async handlePriceQuery(query: string): Promise<{ prompt: string }> {
     try {
-      const tokenAddress = this.getTokenAddressFromQuery(query);
-      if (!tokenAddress) {
-        return { prompt: "I couldn't identify the token you're asking about. Please specify a token ticker (like SOL, BONK) or provide a valid contract address." };
+      const tokenAddresses = this.getMultipleTokenAddressesFromQuery(query);
+      
+      if (tokenAddresses.length === 0) {
+        return { prompt: "I couldn't identify any tokens in your query. Please specify token tickers (like SOL, BONK) or provide valid contract addresses." };
       }
+
+      // Single token query
+      const tokenAddress = tokenAddresses[0];
       const priceInfo = await this.getTokenPriceWithMetadata(tokenAddress);
+      
       if (!priceInfo.usdPrice || priceInfo.nativePrice === null) {
         return { prompt: "Sorry, I couldn't get the price information for this token at the moment." };
       }
+      
       const usd = Number(priceInfo.usdPrice);
       const sol = Number(priceInfo.nativePrice);
       const usdDisplay = usd < 0.01 ? usd.toFixed(8) : usd.toFixed(4);
       const solDisplay = sol < 0.01 ? sol.toFixed(8) : sol.toFixed(6);
+      
       return {
         prompt: `The current price of ${priceInfo.symbol} is $${usdDisplay} USD (${solDisplay} SOL). [View on Solscan](https://solscan.io/token/${priceInfo.mint})`
       };
@@ -111,6 +149,31 @@ export class TokenPriceService {
     }
   }
 
+  private getMultipleTokenAddressesFromQuery(query: string): string[] {
+    const upperQuery = query.toUpperCase();
+    const foundTokens: string[] = [];
+    
+    // Check for common token symbols
+    for (const [symbol, address] of Object.entries(COMMON_TOKENS)) {
+      if (upperQuery.includes(symbol) && !foundTokens.includes(address)) {
+        foundTokens.push(address);
+      }
+    }
+
+    // If no common tokens found, check if the query contains Solana addresses
+    const solanaAddressRegex = /[1-9A-HJ-NP-Za-km-z]{32,44}/g;
+    const matches = query.match(solanaAddressRegex);
+    if (matches) {
+      matches.forEach(addr => {
+        if (!foundTokens.includes(addr)) {
+          foundTokens.push(addr);
+        }
+      });
+    }
+    
+    return foundTokens;
+  }
+
   async getTokenPrice(mint: string): Promise<TokenPrice> {
     try {
       const response = await getMoralis().SolApi.token.getTokenPrice({
@@ -118,7 +181,7 @@ export class TokenPriceService {
         address: mint
       });
 
-      console.log('Moralis response:', response); // Debug: log the full response
+      console.log('Moralis response:', response);
 
       if (response && response.raw) {
         const data = response.raw as MoralisSolanaTokenPrice;
@@ -168,23 +231,6 @@ export class TokenPriceService {
     } catch (error) {
       console.error('Error fetching token metadata:', error);
       throw new Error('Failed to fetch token metadata');
-    }
-  }
-
-  async getTokenPriceWithMetadata(tokenAddress: string): Promise<PriceInfo> {
-    try {
-      const [price, metadata] = await Promise.all([
-        this.getTokenPrice(tokenAddress),
-        this.getTokenMetadata(tokenAddress),
-      ]);
-
-      return {
-        ...price,
-        ...metadata,
-      };
-    } catch (error) {
-      console.error('Error fetching token price and metadata:', error);
-      throw new Error('Failed to fetch token price and metadata');
     }
   }
 } 

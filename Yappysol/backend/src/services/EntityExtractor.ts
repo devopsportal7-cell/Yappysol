@@ -306,16 +306,27 @@ Return format: {"limit": 10}`
   private extractPriceEntities(message: string): ExtractedEntities {
     const entities: ExtractedEntities = {};
     
-    // Common Solana tokens
-    const commonTokens = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH', 'ORCA', 'RAY'];
+    // Common Solana tokens (expanded list)
+    const commonTokens = [
+      'SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'JTO', 'PYTH', 'ORCA', 'RAY', 
+      'SRM', 'SAMO', 'MNGO', 'STEP', 'COPE', 'ROPE', 'KIN', 'MAPS', 'ETH', 'BTC'
+    ];
     const upperMessage = message.toUpperCase();
     
-    // Find first mentioned token
+    // Find all mentioned tokens (not just the first one)
+    const foundTokens: string[] = [];
     for (const token of commonTokens) {
-      if (upperMessage.includes(token)) {
-        entities.tokenSymbol = token;
-        break;
+      if (upperMessage.includes(token) && !foundTokens.includes(token)) {
+        foundTokens.push(token);
       }
+    }
+
+    // Store as array for multiple token support
+    if (foundTokens.length > 0) {
+      // For backwards compatibility, keep single tokenSymbol
+      entities.tokenSymbol = foundTokens[0];
+      // New: support multiple tokens
+      entities.tokenSymbols = foundTokens;
     }
 
     return entities;

@@ -83,12 +83,20 @@ RULE:
 - If "what is" + NO "my" + NO token name → Usually general question about concepts
 
 INTENTS (understand SEMANTICALLY, not just keywords):
-- swap: User wants to trade/exchange tokens (any phrasing: "swap", "convert", "trade", "exchange")
-- launch: User wants to create/mint a token (any phrasing: "launch", "create", "make token", "mint")
+- swap: User wants to trade/exchange tokens OR learn how to swap (any phrasing: "swap", "convert", "trade", "exchange", "how do I swap", "how can I swap", "can you swap", "show me how to swap")
+- launch: User wants to create/mint a token OR learn how to create (any phrasing: "launch", "create", "make token", "mint", "how do I create a token", "how can I launch", "show me how to launch")
 - price: User asking about token price/market data
 - portfolio: User asking about THEIR OWN tokens/balance/holdings (variations: "my tokens", "what I have", "my balance", "portfolio", "holdings", "everything I own", "what's in my wallet")
 - trending: User asking about trending/popular tokens
 - general: General questions, help, greetings
+
+CRITICAL SWAP/LLaunch TUTORIAL DETECTION:
+- "how do I swap" → swap intent, actionable: true (user wants to learn HOW to use the swap feature)
+- "how can I swap" → swap intent, actionable: true
+- "can you swap" → swap intent, actionable: true
+- "how do I create a token" → launch intent, actionable: true (user wants to learn HOW to use the token creation feature)
+- "show me how to swap" → swap intent, actionable: true
+- These are NOT general questions - they are requests for guided tutorials within the chatbot
 
 PORTFOLIO INTENT EXAMPLES (understand all of these):
 - "what is my current portfolio" → PORTFOLIO, actionable: true (user wants THEIR data)
@@ -157,15 +165,20 @@ Return ONLY valid JSON, no markdown:
     
     const lowerMessage = message.toLowerCase();
     
-    // Swap intent
+    // Swap intent - includes "how to" queries
     const swapKeywords = ['swap', 'trade', 'exchange', 'convert', 'buy', 'sell'];
-    if (swapKeywords.some(kw => lowerMessage.includes(kw))) {
+    const swapTutorialPatterns = ['how do i swap', 'how can i swap', 'can you swap', 'show me how to swap', 'how to swap', 'how do i trade'];
+    
+    const hasSwapKeyword = swapKeywords.some(kw => lowerMessage.includes(kw));
+    const hasSwapTutorial = swapTutorialPatterns.some(pattern => lowerMessage.includes(pattern));
+    
+    if (hasSwapKeyword || hasSwapTutorial) {
       const intent = 'swap';
       return {
         intent,
-        confidence: 0.8,
+        confidence: 0.9, // High confidence for swap-related queries
         entities: this.extractSwapEntities(message),
-        isActionable: this.determineActionability(message, intent)
+        isActionable: true // Always actionable - either directly swapping or wanting to learn
       };
     }
 

@@ -699,7 +699,49 @@ Be enthusiastic about the Solana ecosystem!`;
         switch (intentResult.intent) {
           case 'swap': {
             console.log('[chatWithOpenAI] AI-routed to: swap service');
-            // Enhance context with extracted entities
+            
+            // Check if this is a tutorial/help request
+            const lowerMessage = message.toLowerCase();
+            const isTutorialQuery = lowerMessage.includes('how do i') || 
+                                   lowerMessage.includes('how can i') || 
+                                   lowerMessage.includes('how to') ||
+                                   lowerMessage.includes('can you swap') ||
+                                   lowerMessage.includes('show me how');
+            
+            if (isTutorialQuery) {
+              console.log('[chatWithOpenAI] Detected swap tutorial query, showing guided tutorial');
+              
+              // Provide a guided tutorial on how to swap
+              const tutorialPrompt = `🔄 **How to Swap Tokens in This Chat**
+
+I can help you swap tokens directly here in the chat! Here's how:
+
+**Step 1: Tell me what you want to swap**
+Just say something like:
+- "swap 1 SOL for USDC"
+- "trade 100 USDC for BONK"
+- "I want to swap SOL to USDT"
+
+**Step 2: I'll guide you through the process**
+I'll ask you to confirm the details and then prepare the transaction.
+
+**Step 3: Sign the transaction**
+When ready, you'll sign the transaction with your wallet to complete the swap.
+
+---
+
+**Try it now!** Simply tell me what tokens you'd like to swap. For example:
+- "swap 0.5 SOL for USDC"
+- "I want to trade my USDT for BONK"
+- "swap SOL to WIF"`;
+
+              return {
+                prompt: tutorialPrompt,
+                action: 'swap-tutorial'
+              };
+            }
+            
+            // Regular swap intent - enhance context with extracted entities
             const enhancedContext = { ...context, ...entities };
             try {
               const swapResult = await this.tokenSwapService.handleSwapIntent(message, enhancedContext);
@@ -721,6 +763,54 @@ Be enthusiastic about the Solana ecosystem!`;
 
           case 'launch': {
             console.log('[chatWithOpenAI] AI-routed to: token creation service');
+            
+            // Check if this is a tutorial/help request
+            const lowerMessage = message.toLowerCase();
+            const isTutorialQuery = lowerMessage.includes('how do i') || 
+                                   lowerMessage.includes('how can i') || 
+                                   lowerMessage.includes('how to') ||
+                                   lowerMessage.includes('can you create') ||
+                                   lowerMessage.includes('show me how');
+            
+            if (isTutorialQuery) {
+              console.log('[chatWithOpenAI] Detected token creation tutorial query, showing guided tutorial');
+              
+              // Provide a guided tutorial on how to create a token
+              const tutorialPrompt = `🚀 **How to Create a Token in This Chat**
+
+I can help you create your own Solana token directly here in the chat! Here's how:
+
+**Step 1: Tell me about your token**
+Just say something like:
+- "create a token called MyToken"
+- "launch a token called SuperCoin with symbol SUP"
+- "I want to create MyProject with ticker MYPRJ"
+
+**Step 2: I'll guide you through the setup**
+I'll ask you for:
+- Token name
+- Symbol (ticker)
+- Description
+- Social links (optional)
+- Liquidity pool setup
+
+**Step 3: Sign the transactions**
+You'll sign transactions to create the token and optionally set up a liquidity pool.
+
+---
+
+**Try it now!** Simply tell me about the token you want to create. For example:
+- "create MyAwesomeToken"
+- "I want to launch SuperCoin with symbol SUP"
+- "create a token for my project"`;
+
+              return {
+                prompt: tutorialPrompt,
+                action: 'launch-tutorial'
+              };
+            }
+            
+            // Regular launch intent - enhance context with extracted entities
             const enhancedContext = { ...context, ...entities };
             try {
               const creationResult = await this.tokenCreationService.handleCreationIntent(message, enhancedContext);
@@ -744,8 +834,48 @@ Be enthusiastic about the Solana ecosystem!`;
           case 'price': {
             console.log('[chatWithOpenAI] AI-routed to: price service');
             try {
-              const priceResponse = await this.tokenPriceService.handlePriceQuery(message);
-              return { prompt: priceResponse.prompt };
+              // Extract token symbols from entities
+              const tokenSymbols = entities.tokenSymbols || [];
+              
+              // If entities were extracted, use them; otherwise fallback to legacy method
+              if (tokenSymbols.length > 0) {
+                console.log('[chatWithOpenAI] Fetching prices for tokens:', tokenSymbols);
+                
+                // Fetch prices for all requested tokens
+                const prices = await this.tokenPriceService.getMultipleTokenPrices(tokenSymbols);
+                
+                // Generate response using OpenAI with the price data
+                const systemPrompt = `You are a helpful assistant providing token price information. 
+                The user asked about: "${message}"
+                
+                Current price data:
+                ${prices.map(p => `- ${p.symbol}: $${p.usdPrice.toFixed(4)} USD`).join('\n')}
+                
+                Generate a natural, conversational response. If comparing prices, calculate and explain the difference. 
+                Be concise and friendly.`;
+                
+                const chatResponse = await openai!.chat.completions.create({
+                  model: 'gpt-4o-mini',
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: message }
+                  ],
+                  temperature: 0.7,
+                  max_tokens: 300
+                });
+                
+                const responseText = chatResponse.choices[0]?.message?.content || 
+                  `The current prices are:\n${prices.map(p => `- ${p.symbol}: $${p.usdPrice.toFixed(4)}`).join('\n')}`;
+                
+                return { 
+                  prompt: responseText,
+                  entities: { prices, tokenSymbols }
+                };
+              } else {
+                // Fallback to legacy method
+                const priceResponse = await this.tokenPriceService.handlePriceQuery(message);
+                return { prompt: priceResponse.prompt };
+              }
             } catch (error) {
               console.error('[chatWithOpenAI] Error in AI-routed price:', error);
               // Fall through to keyword matching
