@@ -7,11 +7,13 @@ export class WebsocketBalanceSubscriber {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
-  private reconnectDelay = 5000; // 5 seconds
+  private reconnectDelay = 30000; // 30 seconds (increased to reduce rate limit issues)
   private isConnected = false;
   private subscribedWallets = new Set<string>();
   private subscriptionIds = new Map<string, number>(); // Track subscription IDs
   private requestIdToWallet = new Map<number, string>(); // Track request ID to wallet mapping
+  private consecutiveFailures = 0; // Track consecutive connection failures
+  private maxConsecutiveFailures = 5; // Disable after 5 consecutive failures
 
   constructor() {
     this.connect();
@@ -21,7 +23,14 @@ export class WebsocketBalanceSubscriber {
     try {
       // Use Solana WebSocket endpoint from environment
       // Helius WebSocket is recommended (more reliable than public RPC)
-      const wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
+      let wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
+      
+      // If using Helius, check if it's correctly formatted
+      if (wsUrl.includes('helius-rpc.com')) {
+        // Helius WebSocket might not support ?api-key= in the URL
+        // Try without API key or use different endpoint
+        logger.warn('[WSS] Helius WebSocket URL detected. If getting 429 errors, consider using native Solana WebSocket.');
+      }
       
       logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl });
 
@@ -31,6 +40,7 @@ export class WebsocketBalanceSubscriber {
         logger.info('[WSS] Connected to Solana WebSocket');
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.consecutiveFailures = 0; // Reset failure counter on successful connection
         
         // Resubscribe to all wallets
         this.resubscribeAllWallets();
@@ -60,17 +70,32 @@ export class WebsocketBalanceSubscriber {
   }
 
   private scheduleReconnect() {
+    this.consecutiveFailures++;
+    
+    // If we've failed too many times, disable WebSocket to avoid spam
+    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+      logger.error('[WSS] Too many consecutive failures, disabling WebSocket to avoid rate limits. Will retry on next deployment.', {
+        consecutiveFailures: this.consecutiveFailures,
+        message: 'WebSocket disabled due to rate limits. External transactions will still be detected via manual refresh.'
+      });
+      return;
+    }
+    
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.error('[WSS] Max reconnection attempts reached, giving up');
       return;
     }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), // Exponential backoff
+      300000 // Max 5 minutes between retries
+    );
     
     logger.info('[WSS] Scheduling reconnection', { 
       attempt: this.reconnectAttempts, 
-      delay 
+      delay,
+      consecutiveFailures: this.consecutiveFailures
     });
 
     setTimeout(() => {
