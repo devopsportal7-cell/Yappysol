@@ -10,7 +10,8 @@ export const JUP_V6_SWAP       = 'https://quote-api.jup.ag/v6/swap';
  * Get Jupiter API headers with authentication
  */
 export function getJupiterHeaders(): Record<string, string> {
-  const apiKey = process.env.JUPITER_API_KEY;
+  // Try both env var names
+  const apiKey = process.env.JUPITER_API_KEY || process.env.JUP_API_KEY;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -19,9 +20,18 @@ export function getJupiterHeaders(): Record<string, string> {
 
   if (apiKey) {
     headers['x-api-key'] = apiKey;  // ✅ Lowercase as per Jupiter spec
-    console.log('[Jupiter] ✅ API key configured:', apiKey ? `Present (${apiKey.length} chars)` : 'Missing');
+    console.log('[Jupiter] ✅ API key configured:', {
+      hasKey: !!apiKey,
+      keyLength: apiKey?.length,
+      keyPrefix: apiKey?.slice(0, 8),
+      keySuffix: apiKey?.slice(-4)
+    });
   } else {
-    console.error('[Jupiter] ❌ JUPITER_API_KEY not configured - requests will fail!');
+    console.error('[Jupiter] ❌ API key not found in JUPITER_API_KEY or JUP_API_KEY env vars!');
+    console.log('[Jupiter] Available env vars:', {
+      hasJupiter: !!process.env.JUPITER_API_KEY,
+      hasJup: !!process.env.JUP_API_KEY
+    });
   }
 
   return headers;

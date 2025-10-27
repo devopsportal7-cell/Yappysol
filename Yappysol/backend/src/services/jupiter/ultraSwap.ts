@@ -69,11 +69,13 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
 
     const url = `${JUP_ULTRA_ORDER}?${queryParams.toString()}`;
     
+    const headers = getJupiterHeaders();
     console.log('[Jupiter Ultra] Requesting:', url);
+    console.log('[Jupiter Ultra] Headers:', { ...headers, 'x-api-key': headers['x-api-key'] ? `${headers['x-api-key'].slice(0, 8)}...${headers['x-api-key'].slice(-4)}` : 'MISSING' });
 
     // Use GET request as per OpenAPI spec
     const response = await httpClient.get(url, {
-      headers: getJupiterHeaders(),
+      headers,
       timeout: 15_000,
     });
 
