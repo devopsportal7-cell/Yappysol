@@ -610,10 +610,12 @@ class TokenSwapService {
                                     pumpJson = JSON.parse(text);
                                 }
                                 catch (e) {
-                                    return { prompt: 'Swap failed', details: text, step: null };
+                                    console.error('[TokenSwapService] Failed to parse PumpPortal response:', text);
+                                    return { prompt: '❌ Swap failed. Please try again.', step: null };
                                 }
                                 if (pumpJson.error) {
-                                    return { prompt: 'Swap failed', details: pumpJson.error, step: null };
+                                    console.error('[TokenSwapService] PumpPortal API error:', pumpJson.error);
+                                    return { prompt: '❌ Swap failed. Please try again.', step: null };
                                 }
                                 delete exports.swapSessions[userId];
                                 // --- Swap Success Message Construction ---
@@ -698,18 +700,22 @@ class TokenSwapService {
                                     };
                                 }
                                 catch (signError) {
-                                    console.error('[TokenSwapService] Error signing Pump transaction:', signError);
+                                    console.error('[TokenSwapService] Error signing Pump transaction:', {
+                                        error: signError.message,
+                                        stack: signError.stack
+                                    });
                                     delete exports.swapSessions[userId];
                                     return {
-                                        prompt: `Swap failed: ${signError.message}`,
+                                        prompt: '❌ Transaction signing failed. Please try again.',
                                         step: null
                                     };
                                 }
                             }
                             else {
                                 // Handle non-JSON response (shouldn't happen with PumpPortal)
+                                console.error('[TokenSwapService] Unexpected PumpPortal response format');
                                 delete exports.swapSessions[userId];
-                                return { prompt: 'Swap failed: Unexpected response format', step: null };
+                                return { prompt: '❌ Swap failed. Please try again.', step: null };
                             }
                         }
                         else {
@@ -722,32 +728,29 @@ class TokenSwapService {
                         console.warn('[TokenSwapService] PumpPortal error:', error);
                     }
                 }
-                // If we didn't succeed with PumpPortal, try Jupiter as fallback
+                // If we didn't succeed with PumpPortal, try Jupiter Ultra Swap as fallback
                 if (!pumpSuccess) {
-                    console.log('[TokenSwapService] Attempting swap with Jupiter fallback...');
+                    console.log('[TokenSwapService] Attempting swap with Jupiter Ultra Swap...');
                     try {
-                        const { jupiterSwapService } = await Promise.resolve().then(() => __importStar(require('./JupiterSwapService')));
+                        const { jupiterUltraSwapService } = await Promise.resolve().then(() => __importStar(require('./JupiterUltraSwapService')));
                         const { WalletModel } = await Promise.resolve().then(() => __importStar(require('../models/WalletSupabase')));
                         // Get user's keypair
                         const keypair = await WalletModel.getKeypair(walletInfo.id);
-                        // Calculate amounts in lamports (Jupiter API uses lamports)
+                        // Calculate amounts in lamports (Ultra API uses lamports)
                         const amountLamports = action === 'buy'
                             ? amount * 1e9 // SOL amount in lamports
                             : amount * 1e6; // Token amount (assume 6 decimals for most tokens)
                         const inputMint = action === 'buy' ? 'So11111111111111111111111111111111111111112' : mint;
                         const outputMint = action === 'buy' ? mint : 'So11111111111111111111111111111111111111112';
-                        // Perform swap with Jupiter
-                        const signature = await jupiterSwapService.performSwap(keypair, {
+                        // Perform swap with Jupiter Ultra Swap
+                        const signature = await jupiterUltraSwapService.performSwap(keypair, {
                             userPublicKey: walletInfo.publicKey,
                             inputMint,
                             outputMint,
                             amount: amountLamports,
-                            slippageBps: 50, // 0.5%
-                            priorityLevelWithMaxLamports: {
-                                maxLamports: fees.priorityFee * 1e9
-                            }
+                            slippageBps: 50 // 0.5%
                         });
-                        console.log('[TokenSwapService] ✅ Jupiter swap successful:', signature);
+                        console.log('[TokenSwapService] ✅ Jupiter Ultra Swap successful:', signature);
                         // Success message
                         const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
                         const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };
@@ -771,19 +774,33 @@ class TokenSwapService {
                         };
                     }
                     catch (jupiterError) {
-                        console.error('[TokenSwapService] Jupiter fallback also failed:', jupiterError);
+                        console.error('[TokenSwapService] Jupiter Ultra Swap also failed:', {
+                            error: jupiterError.message,
+                            stack: jupiterError.stack,
+                            fromToken: session.fromToken,
+                            toToken: session.toToken,
+                            amount: session.amount
+                        });
                         delete exports.swapSessions[userId];
                         return {
-                            prompt: `Swap failed: PumpPortal returned ${pumpError?.message || '400'}. Jupiter fallback also failed: ${jupiterError.message}. Please try again.`,
+                            prompt: `❌ Swap failed. We encountered technical difficulties. Please try again or contact support if the issue persists.`,
                             step: null
                         };
                     }
                 }
             }
             catch (e) {
-                console.error('[TokenSwapService] Swap error:', e);
+                console.error('[TokenSwapService] Swap error:', {
+                    error: e.message,
+                    stack: e.stack,
+                    userId,
+                    wallet: context.walletAddress
+                });
                 delete exports.swapSessions[userId];
-                return { prompt: `Swap failed: ${e.message}`, step: null };
+                return {
+                    prompt: `❌ Swap failed. Please try again or contact support if the issue persists.`,
+                    step: null
+                };
             }
         }
         // If we're still awaiting confirmation but user didn't type 'proceed', show the summary again

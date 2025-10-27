@@ -52,6 +52,30 @@ export async function refreshNow(wallet: string) {
         // Update cache
         await balanceCacheService.updateCache(wallet, portfolio);
         
+        // Check for new external transactions (deposits)
+        // This ensures transactions are detected even if WebSocket wasn't triggered
+        try {
+          const { externalTransactionService } = await import('../services/ExternalTransactionService');
+          const externalTxs = await externalTransactionService.checkForExternalDeposits(wallet);
+          
+          if (externalTxs.length > 0) {
+            logger.info('[REFRESH] Found new external transactions during balance refresh', {
+              wallet,
+              count: externalTxs.length
+            });
+            
+            const userId = await externalTransactionService.getUserIdByWallet(wallet);
+            if (userId) {
+              for (const tx of externalTxs) {
+                await externalTransactionService.storeExternalTransaction(tx, userId);
+              }
+            }
+          }
+        } catch (error) {
+          // Don't fail the refresh if transaction detection fails
+          logger.error('[REFRESH] Error checking external transactions during refresh', { error, wallet });
+        }
+        
         // Create balance update event
         await balanceCacheService.createBalanceUpdateEvent(
           wallet, 

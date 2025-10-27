@@ -82,14 +82,15 @@ const initializeServices = async () => {
       console.log('⏸️ Background balance update service disabled (ENABLE_BACKGROUND_UPDATES=false)');
     }
 
-    // Initialize WebSocket subscriber (if enabled)
-    const enableWebSocketSubscriber = process.env.ENABLE_WEBSOCKET_CLIENT === 'true';
-    if (enableWebSocketSubscriber) {
+    // Initialize WebSocket subscriber for real-time transaction detection
+    // Always enabled for transaction detection and balance updates
+    try {
       const { websocketBalanceSubscriber } = await import('./services/WebsocketBalanceSubscriber');
       await websocketBalanceSubscriber.subscribeToAllUserWallets();
-      console.log('✅ WebSocket balance subscriber initialized');
-    } else {
-      console.log('⏸️ WebSocket subscriber disabled (ENABLE_WEBSOCKET_CLIENT=false)');
+      console.log('✅ WebSocket balance subscriber initialized - Real-time transaction detection enabled');
+    } catch (error) {
+      console.error('❌ Error initializing WebSocket subscriber:', error);
+      // Don't crash the app if WebSocket fails
     }
 
     // Note: Frontend WebSocket server is now attached in index.ts

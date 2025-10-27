@@ -73,6 +73,8 @@ export class ExternalTransactionService {
    */
   async checkForExternalDeposits(walletAddress: string): Promise<ExternalTransaction[]> {
     try {
+      logger.info(`[EXTERNAL_TX] Checking for external deposits for wallet: ${walletAddress}`);
+      
       // Load platform wallets if not already loaded
       if (this.platformWallets.length === 0) {
         await this.loadPlatformWallets();
@@ -80,31 +82,66 @@ export class ExternalTransactionService {
 
       // Get recent transactions from Helius
       const transactions = await this.getRecentTransactions(walletAddress);
+      logger.info(`[EXTERNAL_TX] Fetched ${transactions.length} total transactions from Helius`);
+      
+      if (transactions.length === 0) {
+        logger.warn(`[EXTERNAL_TX] No transactions returned from Helius for wallet: ${walletAddress}`);
+        return [];
+      }
       
       // Filter for incoming transactions where wallet is recipient
-      const incomingTxs = transactions.filter(tx => 
-        this.isIncomingTransaction(tx, walletAddress) &&
-        tx.confirmationStatus === 'finalized' &&
-        !tx.err
-      );
+      const incomingTxs = transactions.filter(tx => {
+        const isIncoming = this.isIncomingTransaction(tx, walletAddress);
+        const isFinalized = tx.confirmationStatus === 'finalized';
+        const hasNoError = !tx.err;
+        
+        if (!isIncoming) {
+          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - not incoming`);
+        }
+        if (!isFinalized) {
+          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - not finalized: ${tx.confirmationStatus}`);
+        }
+        if (!hasNoError) {
+          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - has error: ${JSON.stringify(tx.err)}`);
+        }
+        
+        return isIncoming && isFinalized && hasNoError;
+      });
+
+      logger.info(`[EXTERNAL_TX] Found ${incomingTxs.length} incoming transactions`);
 
       // Filter for external transactions (not from platform wallets)
-      const externalTxs = incomingTxs.filter(tx => this.isExternalTransaction(tx));
+      const externalTxs = incomingTxs.filter(tx => {
+        const isExternal = this.isExternalTransaction(tx);
+        if (!isExternal) {
+          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - internal transaction`);
+        }
+        return isExternal;
+      });
+
+      logger.info(`[EXTERNAL_TX] Found ${externalTxs.length} external transactions`);
 
       // Convert to our format and deduplicate by signature
       const externalTransactions: ExternalTransaction[] = [];
       for (const tx of externalTxs) {
         const exists = await this.checkTransactionExists(tx.signature);
         if (!exists) {
+          logger.info(`[EXTERNAL_TX] New external transaction found: ${tx.signature}`);
           const externalTx = await this.convertToExternalTransaction(tx, walletAddress);
           if (externalTx) {
             externalTransactions.push(externalTx);
+          } else {
+            logger.warn(`[EXTERNAL_TX] Failed to convert transaction ${tx.signature}`);
           }
+        } else {
+          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} already exists in database`);
         }
       }
 
       if (externalTransactions.length > 0) {
         logger.info(`[EXTERNAL_TX] Found ${externalTransactions.length} new external transactions for ${walletAddress}`);
+      } else {
+        logger.info(`[EXTERNAL_TX] No new external transactions for ${walletAddress}`);
       }
 
       return externalTransactions;
@@ -247,13 +284,24 @@ export class ExternalTransactionService {
    */
   private async getRecentTransactions(walletAddress: string): Promise<HeliusTransaction[]> {
     try {
+      logger.info(`[EXTERNAL_TX] Fetching transactions from Helius for wallet: ${walletAddress}`);
       const response = await fetch(`${this.heliusBaseUrl}/v0/addresses/${walletAddress}/transactions?api-key=${this.heliusApiKey}&limit=50`);
       
+      logger.info(`[EXTERNAL_TX] Helius API response status: ${response.status}`);
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('[EXTERNAL_TX] Helius API error', { 
+          status: response.status, 
+          statusText: response.statusText,
+          errorText,
+          walletAddress 
+        });
         throw new Error(`Helius API error: ${response.status} ${response.statusText}`);
       }
 
       const transactions = await response.json();
+      logger.info(`[EXTERNAL_TX] Received ${Array.isArray(transactions) ? transactions.length : 0} transactions from Helius`);
       return transactions || [];
     } catch (error) {
       logger.error('[EXTERNAL_TX] Error fetching transactions from Helius', { error, walletAddress });

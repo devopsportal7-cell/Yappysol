@@ -20,16 +20,10 @@ export class WebsocketBalanceSubscriber {
   private connect() {
     try {
       // Use Solana WebSocket endpoint from environment
-      const wssUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
+      // This should be native Solana WebSocket, NOT Helius
+      const wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
       
-      // If SOLANA_WSS_URL already contains API key, use it as-is
-      // Otherwise, append the API key
-      let wsUrl = wssUrl;
-      if (!wssUrl.includes('api-key=') && process.env.HELIUS_API_KEY) {
-        wsUrl = `${wssUrl}?api-key=${process.env.HELIUS_API_KEY}`;
-      }
-      
-      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl.replace(/api-key=[^&]+/, 'api-key=***') });
+      logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl });
 
       this.ws = new WebSocket(wsUrl);
 

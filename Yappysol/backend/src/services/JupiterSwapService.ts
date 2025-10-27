@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import axios from 'axios';
 import { Connection, VersionedTransaction, Transaction } from '@solana/web3.js';
 
 export interface JupiterQuoteParams {
@@ -48,6 +48,9 @@ export interface JupiterSwapParams {
 }
 
 export class JupiterSwapService {
+  // Using Ultra Swap API instead of legacy v6
+  private readonly ultraBaseUrl = 'https://api.jup.ag/ultra';
+  private readonly legacyBaseUrl = 'https://quote-api.jup.ag/v6';
   private readonly baseUrl = 'https://quote-api.jup.ag/v6';
   private readonly swapUrl = 'https://quote-api.jup.ag/v6/swap';
 
@@ -73,14 +76,13 @@ export class JupiterSwapService {
     url.searchParams.append('asLegacyTransaction', asLegacyTransaction.toString());
 
     try {
-      const response = await fetch(url.toString());
+      const response = await axios.get(url.toString());
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Jupiter quote API error: ${response.status} - ${errorText}`);
+      if (response.status !== 200) {
+        throw new Error(`Jupiter quote API error: ${response.status}`);
       }
 
-      const quote: JupiterQuoteResponse = await response.json();
+      const quote: JupiterQuoteResponse = response.data;
       
       // Log quote for debugging
       console.log('[JupiterSwapService] Quote received:', {
@@ -132,20 +134,17 @@ export class JupiterSwapService {
         asLegacyTransaction: false
       };
 
-      const response = await fetch(this.swapUrl, {
-        method: 'POST',
+      const response = await axios.post(this.swapUrl, swapParams, {
         headers: {
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(swapParams)
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Jupiter swap API error: ${response.status} - ${errorText}`);
+      if (response.status !== 200) {
+        throw new Error(`Jupiter swap API error: ${response.status}`);
       }
 
-      const { swapTransaction } = await response.json();
+      const { swapTransaction } = response.data;
       
       console.log('[JupiterSwapService] Swap transaction received');
       
