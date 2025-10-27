@@ -1,10 +1,11 @@
-import axios from 'axios';
-import { Connection, VersionedTransaction, Transaction } from '@solana/web3.js';
+import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { httpClient } from '../lib/httpClient';
+import { JUP_PRO_QUOTE, JUP_LITE_QUOTE, JUP_SWAP_URL } from '../constants/jupiter';
 
 export interface JupiterQuoteParams {
   inputMint: string;
   outputMint: string;
-  amount: number;
+  amount: number;  // in lamports
   slippageBps?: number;
   onlyDirectRoutes?: boolean;
   asLegacyTransaction?: boolean;
@@ -39,7 +40,7 @@ export interface JupiterSwapParams {
   userPublicKey: string;
   inputMint: string;
   outputMint: string;
-  amount: number;
+  amount: number;  // in lamports
   slippageBps?: number;
   priorityLevelWithMaxLamports?: {
     maxLamports?: number;
@@ -48,44 +49,40 @@ export interface JupiterSwapParams {
 }
 
 export class JupiterSwapService {
-  // Using Ultra Swap API instead of legacy v6
-  private readonly ultraBaseUrl = 'https://api.jup.ag/ultra';
-  private readonly legacyBaseUrl = 'https://quote-api.jup.ag/v6';
-  private readonly baseUrl = 'https://quote-api.jup.ag/v6';
-  private readonly swapUrl = 'https://quote-api.jup.ag/v6/swap';
-
   /**
-   * Get a quote for a swap
+   * Get a quote for a swap using Jupiter v1 API with fallback
    */
   async getQuote(params: JupiterQuoteParams): Promise<JupiterQuoteResponse> {
     const {
       inputMint,
       outputMint,
       amount,
-      slippageBps = 50, // 0.5% default slippage
+      slippageBps = 50,
       onlyDirectRoutes = false,
       asLegacyTransaction = false
     } = params;
 
-    const url = new URL('/quote', this.baseUrl);
-    url.searchParams.append('inputMint', inputMint);
-    url.searchParams.append('outputMint', outputMint);
-    url.searchParams.append('amount', amount.toString());
-    url.searchParams.append('slippageBps', slippageBps.toString());
-    url.searchParams.append('onlyDirectRoutes', onlyDirectRoutes.toString());
-    url.searchParams.append('asLegacyTransaction', asLegacyTransaction.toString());
+    const qs = new URLSearchParams({
+      inputMint,
+      outputMint,
+      inAmount: String(amount),
+      slippageBps: String(slippageBps),
+      onlyDirectRoutes: String(onlyDirectRoutes),
+      asLegacyTransaction: String(asLegacyTransaction),
+    });
 
+    // Try Pro endpoint first, fallback to Lite
     try {
-      const response = await axios.get(url.toString());
+      console.log('[JupiterSwapService] Requesting quote from Jupiter Pro...');
+      const response = await httpClient.get(`${JUP_PRO_QUOTE}?${qs.toString()}`);
       
       if (response.status !== 200) {
-        throw new Error(`Jupiter quote API error: ${response.status}`);
+        throw new Error(`Jupiter Pro API error: ${response.status}`);
       }
 
       const quote: JupiterQuoteResponse = response.data;
       
-      // Log quote for debugging
-      console.log('[JupiterSwapService] Quote received:', {
+      console.log('[JupiterSwapService] Quote received from Pro:', {
         inputMint,
         outputMint,
         inAmount: quote.inAmount,
@@ -95,8 +92,31 @@ export class JupiterSwapService {
 
       return quote;
     } catch (error: any) {
-      console.error('[JupiterSwapService] Error getting quote:', error);
-      throw error;
+      console.warn('[JupiterSwapService] Pro endpoint failed, trying Lite...', error.message);
+      
+      // Fallback to Lite endpoint
+      try {
+        const response = await httpClient.get(`${JUP_LITE_QUOTE}?${qs.toString()}`);
+        
+        if (response.status !== 200) {
+          throw new Error(`Jupiter Lite API error: ${response.status}`);
+        }
+
+        const quote: JupiterQuoteResponse = response.data;
+        
+        console.log('[JupiterSwapService] Quote received from Lite:', {
+          inputMint,
+          outputMint,
+          inAmount: quote.inAmount,
+          outAmount: quote.outAmount,
+          priceImpact: quote.priceImpactPct
+        });
+
+        return quote;
+      } catch (liteError: any) {
+        console.error('[JupiterSwapService] Both Pro and Lite endpoints failed');
+        throw new Error(`Jupiter API unavailable: ${liteError.message}`);
+      }
     }
   }
 
@@ -134,7 +154,7 @@ export class JupiterSwapService {
         asLegacyTransaction: false
       };
 
-      const response = await axios.post(this.swapUrl, swapParams, {
+      const response = await httpClient.post(JUP_SWAP_URL, swapParams, {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -212,4 +232,3 @@ export class JupiterSwapService {
 }
 
 export const jupiterSwapService = new JupiterSwapService();
-

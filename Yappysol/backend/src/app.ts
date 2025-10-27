@@ -17,6 +17,7 @@ import portfolioRoutes from './routes/portfolio';
 import walletBalanceRoutes from './routes/walletBalance';
 import activityRoutes from './routes/activity';
 import diagnosticsRoutes from './routes/diagnostics';
+import healthRoutes from './routes/health';
 
 dotenv.config();
 
@@ -69,6 +70,7 @@ app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/wallet', walletBalanceRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/diagnostics', diagnosticsRoutes);
+app.use('/health', healthRoutes);
 
 // Initialize background services
 const initializeServices = async () => {
