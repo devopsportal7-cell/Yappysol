@@ -1,6 +1,5 @@
 import { Connection, VersionedTransaction } from '@solana/web3.js';
-import { getQuote } from './jupiter/quote';
-import { postSwap } from './jupiter/swap';
+import { performUltraSwap } from './jupiter/ultraSwap';
 
 export interface JupiterSwapParams {
   userPublicKey: string;
@@ -16,7 +15,7 @@ export interface JupiterSwapParams {
 
 export class JupiterSwapService {
   /**
-   * Perform a complete swap (quote + swap + sign + send)
+   * Perform a complete swap using Jupiter Ultra Swap API
    */
   async performSwap(
     keypair: any,
@@ -29,10 +28,9 @@ export class JupiterSwapService {
         outputMint,
         amount,
         slippageBps = 50,
-        priorityLevelWithMaxLamports
       } = params;
 
-      console.log('[JupiterSwapService] Starting swap', {
+      console.log('[JupiterSwapService] Starting Ultra Swap', {
         inputMint,
         outputMint,
         amount,
@@ -40,45 +38,14 @@ export class JupiterSwapService {
         userPublicKey: `${userPublicKey.slice(0, 8)}...${userPublicKey.slice(-8)}`
       });
 
-      // Step 1: Get quote
-      const quoteResult = await getQuote({
+      // Use Ultra Swap API
+      const signature = await performUltraSwap(keypair, {
+        userPublicKey,
         inputMint,
         outputMint,
         amount,
         slippageBps,
-        swapMode: 'ExactIn',
-        onlyDirectRoutes: false,
       });
-
-      console.log('[JupiterSwapService] Quote received from', quoteResult.source);
-
-      // Step 2: Get swap transaction
-      const swapResult = await postSwap(quoteResult, userPublicKey);
-
-      console.log('[JupiterSwapService] Swap transaction received from', swapResult.source);
-
-      // Step 3: Decode and sign the transaction
-      const transactionBytes = Uint8Array.from(atob(swapResult.swapTransaction), c => c.charCodeAt(0));
-      const transaction = VersionedTransaction.deserialize(transactionBytes);
-      
-      // Sign with keypair
-      transaction.sign([keypair]);
-
-      // Step 4: Submit to network
-      const connection = new Connection('https://api.mainnet-beta.solana.com');
-      const signature = await connection.sendRawTransaction(
-        transaction.serialize(),
-        { skipPreflight: false }
-      );
-
-      console.log('[JupiterSwapService] ✅ Transaction submitted:', signature);
-
-      // Step 5: Wait for confirmation
-      const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-
-      if (confirmation.value.err) {
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-      }
 
       console.log('[JupiterSwapService] ✅ Swap successful:', signature);
       return signature;
