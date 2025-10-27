@@ -572,7 +572,7 @@ class TokenSwapService {
                     publicKey: walletInfo.publicKey,
                     action,
                     mint,
-                    denominatedInSol: denominatedInSol.toString(),
+                    denominatedInSol: denominatedInSol, // Keep as boolean, not string
                     amount,
                     slippage: 0.5,
                     priorityFee: fees.priorityFee,
@@ -581,144 +581,203 @@ class TokenSwapService {
                 // Log the swap request payload for debugging
                 console.log('[DEBUG] Swap request payload:', swapRequest);
                 // Try PumpPortal first
+                // NOTE: PumpPortal is primarily for Pump.fun tokens, not stablecoins like USDC/USDT
+                // If swapping to/from stablecoins, we should skip PumpPortal and use Jupiter directly
+                const isStablecoin = mint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' || // USDC
+                    mint === 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'; // USDT
                 let pumpSuccess = false;
                 let pumpError = null;
-                try {
-                    console.log('[TokenSwapService] Attempting swap with PumpPortal...');
-                    const pumpRes = await (0, node_fetch_1.default)('https://pumpportal.fun/api/trade-local', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(swapRequest)
-                    });
-                    if (pumpRes.ok) {
-                        pumpSuccess = true;
-                        const contentType = pumpRes.headers.get('content-type');
-                        const buffer = await pumpRes.arrayBuffer();
-                        const text = Buffer.from(buffer).toString('utf-8');
-                        if (contentType && contentType.includes('application/json')) {
-                            let pumpJson;
-                            try {
-                                pumpJson = JSON.parse(text);
-                            }
-                            catch (e) {
-                                return { prompt: 'Swap failed', details: text, step: null };
-                            }
-                            if (pumpJson.error) {
-                                return { prompt: 'Swap failed', details: pumpJson.error, step: null };
-                            }
-                            delete exports.swapSessions[userId];
-                            // --- Swap Success Message Construction ---
-                            // Resolve symbols
-                            const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
-                            const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };
-                            const fromSymbol = fromTokenObj.symbol || session.fromToken;
-                            const toSymbol = toTokenObj.symbol || session.toToken;
-                            // Amount in SOL (if denominatedInSol)
-                            const amountSol = denominatedInSol ? amount : undefined;
-                            // Try to get USD equivalent (if possible)
-                            let usdAmount = null;
-                            try {
-                                const priceService = new TokenPriceService();
-                                if (denominatedInSol) {
-                                    const solPrice = await priceService.getTokenPrice(SOL_MINT);
-                                    usdAmount = solPrice.usdPrice * amount;
-                                }
-                                else {
-                                    const fromPrice = await priceService.getTokenPrice(session.fromToken);
-                                    usdAmount = fromPrice.usdPrice * amount;
-                                }
-                            }
-                            catch (e) {
-                                usdAmount = null;
-                            }
-                            // Solscan link (use tx if available, else token)
-                            let solscanLink = '';
-                            if (pumpJson.txid) {
-                                solscanLink = `https://solscan.io/tx/${pumpJson.txid}`;
-                            }
-                            else if (mint) {
-                                solscanLink = `https://solscan.io/token/${mint}`;
-                            }
-                            const usdDisplay = usdAmount !== null ? ` (~$${usdAmount.toFixed(2)} USD)` : '';
-                            const solDisplay = amountSol !== undefined ? `${amountSol} SOL` : `${amount} ${fromSymbol}`;
-                            // Sign the transaction on backend
-                            console.log('[TokenSwapService] Signing Pump transaction on backend...');
-                            try {
-                                // Import required modules
-                                const { Connection, Transaction, VersionedTransaction } = await Promise.resolve().then(() => __importStar(require('@solana/web3.js')));
-                                const { WalletModel } = await Promise.resolve().then(() => __importStar(require('../models/WalletSupabase')));
-                                // Get user's keypair
-                                const keypair = await WalletModel.getKeypair(walletInfo.id);
-                                // Decode the unsigned transaction
-                                const unsignedTx = pumpJson.unsignedTx;
-                                const transactionBytes = Uint8Array.from(atob(unsignedTx), c => c.charCodeAt(0));
-                                // Try to deserialize as VersionedTransaction first, fallback to Transaction
-                                let transaction;
+                if (isStablecoin) {
+                    console.log('[TokenSwapService] Detected stablecoin swap, skipping PumpPortal and using Jupiter directly');
+                    pumpError = new Error('PumpPortal does not support stablecoin swaps');
+                }
+                else {
+                    try {
+                        console.log('[TokenSwapService] Attempting swap with PumpPortal...');
+                        const pumpRes = await (0, node_fetch_1.default)('https://pumpportal.fun/api/trade-local', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(swapRequest)
+                        });
+                        if (pumpRes.ok) {
+                            pumpSuccess = true;
+                            const contentType = pumpRes.headers.get('content-type');
+                            const buffer = await pumpRes.arrayBuffer();
+                            const text = Buffer.from(buffer).toString('utf-8');
+                            if (contentType && contentType.includes('application/json')) {
+                                let pumpJson;
                                 try {
-                                    transaction = VersionedTransaction.deserialize(transactionBytes);
+                                    pumpJson = JSON.parse(text);
                                 }
-                                catch {
-                                    transaction = Transaction.from(transactionBytes);
+                                catch (e) {
+                                    return { prompt: 'Swap failed', details: text, step: null };
                                 }
-                                // Sign the transaction
-                                transaction.sign(keypair);
-                                // Send to network
-                                const connection = new Connection('https://api.mainnet-beta.solana.com');
-                                const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
-                                console.log('[TokenSwapService] ✅ Pump transaction signed and submitted:', signature);
-                                // Wait for confirmation
-                                const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-                                if (confirmation.value.err) {
-                                    throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                                if (pumpJson.error) {
+                                    return { prompt: 'Swap failed', details: pumpJson.error, step: null };
                                 }
                                 delete exports.swapSessions[userId];
-                                // Success message - simplified since we already have the signature
-                                return {
-                                    prompt: `✅ Swap successful!\n\n` +
-                                        `**Transaction:** ${signature}\n\n` +
-                                        `[View on Solscan](https://solscan.io/tx/${signature})`,
-                                    step: null,
-                                    action: 'swap-complete',
-                                    signature: signature,
-                                    swapDetails: {
-                                        fromToken: session.fromToken,
-                                        toToken: session.toToken,
-                                        amount: session.amount,
-                                        signature
+                                // --- Swap Success Message Construction ---
+                                // Resolve symbols
+                                const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
+                                const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };
+                                const fromSymbol = fromTokenObj.symbol || session.fromToken;
+                                const toSymbol = toTokenObj.symbol || session.toToken;
+                                // Amount in SOL (if denominatedInSol)
+                                const amountSol = denominatedInSol ? amount : undefined;
+                                // Try to get USD equivalent (if possible)
+                                let usdAmount = null;
+                                try {
+                                    const priceService = new TokenPriceService();
+                                    if (denominatedInSol) {
+                                        const solPrice = await priceService.getTokenPrice(SOL_MINT);
+                                        usdAmount = solPrice.usdPrice * amount;
                                     }
-                                };
+                                    else {
+                                        const fromPrice = await priceService.getTokenPrice(session.fromToken);
+                                        usdAmount = fromPrice.usdPrice * amount;
+                                    }
+                                }
+                                catch (e) {
+                                    usdAmount = null;
+                                }
+                                // Solscan link (use tx if available, else token)
+                                let solscanLink = '';
+                                if (pumpJson.txid) {
+                                    solscanLink = `https://solscan.io/tx/${pumpJson.txid}`;
+                                }
+                                else if (mint) {
+                                    solscanLink = `https://solscan.io/token/${mint}`;
+                                }
+                                const usdDisplay = usdAmount !== null ? ` (~$${usdAmount.toFixed(2)} USD)` : '';
+                                const solDisplay = amountSol !== undefined ? `${amountSol} SOL` : `${amount} ${fromSymbol}`;
+                                // Sign the transaction on backend
+                                console.log('[TokenSwapService] Signing Pump transaction on backend...');
+                                try {
+                                    // Import required modules
+                                    const { Connection, Transaction, VersionedTransaction } = await Promise.resolve().then(() => __importStar(require('@solana/web3.js')));
+                                    const { WalletModel } = await Promise.resolve().then(() => __importStar(require('../models/WalletSupabase')));
+                                    // Get user's keypair
+                                    const keypair = await WalletModel.getKeypair(walletInfo.id);
+                                    // Decode the unsigned transaction
+                                    const unsignedTx = pumpJson.unsignedTx;
+                                    const transactionBytes = Uint8Array.from(atob(unsignedTx), c => c.charCodeAt(0));
+                                    // Try to deserialize as VersionedTransaction first, fallback to Transaction
+                                    let transaction;
+                                    try {
+                                        transaction = VersionedTransaction.deserialize(transactionBytes);
+                                    }
+                                    catch {
+                                        transaction = Transaction.from(transactionBytes);
+                                    }
+                                    // Sign the transaction
+                                    transaction.sign(keypair);
+                                    // Send to network
+                                    const connection = new Connection('https://api.mainnet-beta.solana.com');
+                                    const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                                    console.log('[TokenSwapService] ✅ Pump transaction signed and submitted:', signature);
+                                    // Wait for confirmation
+                                    const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+                                    if (confirmation.value.err) {
+                                        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                                    }
+                                    delete exports.swapSessions[userId];
+                                    // Success message - simplified since we already have the signature
+                                    return {
+                                        prompt: `✅ Swap successful!\n\n` +
+                                            `**Transaction:** ${signature}\n\n` +
+                                            `[View on Solscan](https://solscan.io/tx/${signature})`,
+                                        step: null,
+                                        action: 'swap-complete',
+                                        signature: signature,
+                                        swapDetails: {
+                                            fromToken: session.fromToken,
+                                            toToken: session.toToken,
+                                            amount: session.amount,
+                                            signature
+                                        }
+                                    };
+                                }
+                                catch (signError) {
+                                    console.error('[TokenSwapService] Error signing Pump transaction:', signError);
+                                    delete exports.swapSessions[userId];
+                                    return {
+                                        prompt: `Swap failed: ${signError.message}`,
+                                        step: null
+                                    };
+                                }
                             }
-                            catch (signError) {
-                                console.error('[TokenSwapService] Error signing Pump transaction:', signError);
+                            else {
+                                // Handle non-JSON response (shouldn't happen with PumpPortal)
                                 delete exports.swapSessions[userId];
-                                return {
-                                    prompt: `Swap failed: ${signError.message}`,
-                                    step: null
-                                };
+                                return { prompt: 'Swap failed: Unexpected response format', step: null };
                             }
                         }
                         else {
-                            // Handle non-JSON response (shouldn't happen with PumpPortal)
-                            delete exports.swapSessions[userId];
-                            return { prompt: 'Swap failed: Unexpected response format', step: null };
+                            pumpError = new Error(`PumpPortal API returned ${pumpRes.status}`);
+                            console.warn('[TokenSwapService] PumpPortal failed, will try Jupiter fallback:', pumpError.message);
                         }
                     }
-                    else {
-                        pumpError = new Error(`PumpPortal API returned ${pumpRes.status}`);
-                        console.warn('[TokenSwapService] PumpPortal failed, will try Jupiter fallback:', pumpError.message);
+                    catch (error) {
+                        pumpError = error;
+                        console.warn('[TokenSwapService] PumpPortal error:', error);
                     }
                 }
-                catch (error) {
-                    pumpError = error;
-                    console.warn('[TokenSwapService] PumpPortal error:', error);
-                }
-                // If we didn't succeed with PumpPortal, show error
+                // If we didn't succeed with PumpPortal, try Jupiter as fallback
                 if (!pumpSuccess) {
-                    delete exports.swapSessions[userId];
-                    return {
-                        prompt: `Swap failed: ${pumpError?.message || 'Unknown error'}. Please try again.`,
-                        step: null
-                    };
+                    console.log('[TokenSwapService] Attempting swap with Jupiter fallback...');
+                    try {
+                        const { jupiterSwapService } = await Promise.resolve().then(() => __importStar(require('./JupiterSwapService')));
+                        const { WalletModel } = await Promise.resolve().then(() => __importStar(require('../models/WalletSupabase')));
+                        // Get user's keypair
+                        const keypair = await WalletModel.getKeypair(walletInfo.id);
+                        // Calculate amounts in lamports (Jupiter API uses lamports)
+                        const amountLamports = action === 'buy'
+                            ? amount * 1e9 // SOL amount in lamports
+                            : amount * 1e6; // Token amount (assume 6 decimals for most tokens)
+                        const inputMint = action === 'buy' ? 'So11111111111111111111111111111111111111112' : mint;
+                        const outputMint = action === 'buy' ? mint : 'So11111111111111111111111111111111111111112';
+                        // Perform swap with Jupiter
+                        const signature = await jupiterSwapService.performSwap(keypair, {
+                            userPublicKey: walletInfo.publicKey,
+                            inputMint,
+                            outputMint,
+                            amount: amountLamports,
+                            slippageBps: 50, // 0.5%
+                            priorityLevelWithMaxLamports: {
+                                maxLamports: fees.priorityFee * 1e9
+                            }
+                        });
+                        console.log('[TokenSwapService] ✅ Jupiter swap successful:', signature);
+                        // Success message
+                        const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
+                        const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };
+                        const fromSymbol = fromTokenObj.symbol || session.fromToken;
+                        const toSymbol = toTokenObj.symbol || session.toToken;
+                        delete exports.swapSessions[userId];
+                        return {
+                            prompt: `✅ Swap successful via Jupiter!\n\n` +
+                                `**You swapped:** ${session.amount} ${fromSymbol} → ${toSymbol}\n` +
+                                `**Transaction:** ${signature}\n\n` +
+                                `[View on Solscan](https://solscan.io/tx/${signature})`,
+                            step: null,
+                            action: 'swap-complete',
+                            signature: signature,
+                            swapDetails: {
+                                fromToken: session.fromToken,
+                                toToken: session.toToken,
+                                amount: session.amount,
+                                signature
+                            }
+                        };
+                    }
+                    catch (jupiterError) {
+                        console.error('[TokenSwapService] Jupiter fallback also failed:', jupiterError);
+                        delete exports.swapSessions[userId];
+                        return {
+                            prompt: `Swap failed: PumpPortal returned ${pumpError?.message || '400'}. Jupiter fallback also failed: ${jupiterError.message}. Please try again.`,
+                            step: null
+                        };
+                    }
                 }
             }
             catch (e) {
