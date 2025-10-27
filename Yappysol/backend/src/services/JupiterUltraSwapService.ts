@@ -33,8 +33,8 @@ export interface UltraExecuteResponse {
 }
 
 export class JupiterUltraSwapService {
-  private readonly ultraOrderUrl = 'https://api.jup.ag/ultra/order';
-  private readonly ultraExecuteUrl = 'https://api.jup.ag/ultra/execute';
+  private readonly ultraOrderUrl = 'https://quote-api.jup.ag/v6/quote'; // Use legacy v6 for now
+  private readonly ultraExecuteUrl = 'https://quote-api.jup.ag/v6/swap'; // Use legacy v6 for now
 
   /**
    * Create an order for a swap
@@ -59,21 +59,16 @@ export class JupiterUltraSwapService {
         slippageBps
       });
 
-      const response = await axios.post(
-        this.ultraOrderUrl,
-        {
-          userPublicKey,
-          inputMint,
-          outputMint,
-          amount,
-          slippageBps
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      // Use Jupiter v6 API for quote
+      const url = new URL(this.ultraOrderUrl);
+      url.searchParams.append('inputMint', inputMint);
+      url.searchParams.append('outputMint', outputMint);
+      url.searchParams.append('amount', amount.toString());
+      url.searchParams.append('slippageBps', slippageBps.toString());
+      url.searchParams.append('onlyDirectRoutes', 'false');
+      url.searchParams.append('asLegacyTransaction', 'false');
+
+      const response = await axios.get(url.toString());
 
       if (response.status !== 200) {
         throw new Error(`Jupiter Ultra API error: ${response.status}`);

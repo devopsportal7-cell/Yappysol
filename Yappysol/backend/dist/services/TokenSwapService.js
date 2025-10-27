@@ -774,7 +774,7 @@ class TokenSwapService {
                         };
                     }
                     catch (jupiterError) {
-                        console.error('[TokenSwapService] Jupiter Ultra Swap also failed:', {
+                        console.error('[TokenSwapService] Jupiter fallback also failed:', {
                             error: jupiterError.message,
                             stack: jupiterError.stack,
                             fromToken: session.fromToken,

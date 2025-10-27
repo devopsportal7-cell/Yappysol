@@ -20,8 +20,14 @@ export class WebsocketBalanceSubscriber {
   private connect() {
     try {
       // Use Solana WebSocket endpoint from environment
-      // This should be native Solana WebSocket, NOT Helius
-      const wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
+      // Force native Solana WebSocket (remove Helius URL if set)
+      let wsUrl = process.env.SOLANA_WSS_URL || 'wss://api.mainnet-beta.solana.com';
+      
+      // Ensure we're not using Helius WebSocket
+      if (wsUrl.includes('helius-rpc.com')) {
+        logger.warn('[WSS] Detected Helius URL in SOLANA_WSS_URL, forcing native Solana WebSocket');
+        wsUrl = 'wss://api.mainnet-beta.solana.com';
+      }
       
       logger.info('[WSS] Connecting to Solana WebSocket', { url: wsUrl });
 
@@ -122,15 +128,18 @@ export class WebsocketBalanceSubscriber {
         
         const notificationReceivedTimestamp = Date.now();
         
-        logger.info('[WSS] Solana account notification received', { 
+        logger.info('[WSS] ✅ TRANSACTION DETECTED via Solana WebSocket!', { 
           wallet: walletAddress,
           subscriptionId,
           slot: accountInfo.context?.slot,
-          lamports: accountInfo.value?.lamports
+          lamports: accountInfo.value?.lamports,
+          timestamp: new Date().toISOString()
         });
         
         // Check for external transactions when account changes
+        logger.info('[WSS] 🔍 Checking for external transactions...');
         await this.checkForExternalTransactions(walletAddress, notificationReceivedTimestamp);
+        logger.info('[WSS] ✅ External transaction check completed');
         
         // Trigger immediate balance refresh from Helius and update cache
         const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
