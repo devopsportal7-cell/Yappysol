@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { jupiterSwapService } from '../services/JupiterSwapService';
+import { getQuote } from '../services/jupiter/quote';
 
 const router = Router();
 
@@ -9,23 +9,26 @@ const router = Router();
  */
 router.get('/jupiter', async (req, res) => {
   try {
-    // cheap quote check: SOL->USDC, tiny amount (1 lamport for reachability)
-    const data = await jupiterSwapService.getQuote({
+    // cheap quote check: SOL->USDT, tiny amount (1 lamport for reachability)
+    const quoteResult = await getQuote({
       inputMint: 'So11111111111111111111111111111111111111112',
-      outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-      amount: 1,
+      outputMint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+      amount: 1_000_000, // 1 SOL worth of lamports
       slippageBps: 50,
+      swapMode: 'ExactIn',
+      onlyDirectRoutes: false,
     });
     
     res.json({ 
       ok: true, 
-      via: data ? 'pro/lite' : 'none',
-      inputMint: data.inputMint,
-      outputMint: data.outputMint
+      quoteSource: quoteResult.source,
+      dataKeys: Object.keys(quoteResult.data || {}).slice(0, 5),
+      inputMint: quoteResult.data?.inputMint,
+      outputMint: quoteResult.data?.outputMint
     });
   } catch (e: any) {
     console.error('[HEALTH] Jupiter check failed:', e);
-    res.status(502).json({ 
+    res.status(503).json({ 
       ok: false, 
       error: e?.message ?? String(e) 
     });
