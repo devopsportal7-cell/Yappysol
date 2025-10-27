@@ -1,6 +1,6 @@
 import { httpClient } from '../../lib/httpClient';
 import { JUP_ULTRA_ORDER, JUP_ULTRA_EXECUTE, getJupiterHeaders } from './constants';
-import { Connection, VersionedTransaction, Keypair } from '@solana/web3.js';
+import { VersionedTransaction, Keypair } from '@solana/web3.js';
 
 export interface UltraOrderParams {
   userPublicKey: string;
@@ -49,7 +49,7 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
     slippageBps = 50,
   } = params;
 
-  console.log('[Jupiter Ultra] Creating order', {
+  console.log('[Jupiter Ultra] Creating order with GET request', {
     inputMint,
     outputMint,
     amount,
@@ -58,24 +58,37 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
   });
 
   try {
-    const response = await httpClient.post(
-      JUP_ULTRA_ORDER,
-      {
-        userPublicKey,
-        inputMint,
-        outputMint,
-        amount,
-        slippageBps,
-      },
-      {
-        headers: getJupiterHeaders(),
-        timeout: 15_000,
-      }
-    );
+    // Build query string for GET request
+    const queryParams = new URLSearchParams({
+      inputMint,
+      outputMint,
+      amount: String(amount),
+      taker: userPublicKey, // Required: the address that will sign
+      slippageBps: String(slippageBps),
+    });
 
-    if (response.status === 200 && response.data?.orderId) {
-      console.log('[Jupiter Ultra] ✅ Order created:', response.data.orderId);
-      return response.data;
+    const url = `${JUP_ULTRA_ORDER}?${queryParams.toString()}`;
+    
+    console.log('[Jupiter Ultra] Requesting:', url);
+
+    // Use GET request as per OpenAPI spec
+    const response = await httpClient.get(url, {
+      headers: getJupiterHeaders(),
+      timeout: 15_000,
+    });
+
+    if (response.status === 200 && response.data?.requestId) {
+      console.log('[Jupiter Ultra] ✅ Order created:', {
+        requestId: response.data.requestId,
+        transaction: response.data.transaction ? 'present' : 'missing',
+        router: response.data.router
+      });
+      
+      return {
+        orderId: response.data.requestId,
+        transaction: response.data.transaction || '',
+        estimatedOutput: response.data.outAmount,
+      };
     }
 
     throw new Error(`Ultra order returned status ${response.status}`);
@@ -87,20 +100,21 @@ export async function createUltraOrder(params: UltraOrderParams): Promise<UltraO
 }
 
 /**
- * Execute an Ultra order (returns unsigned transaction for signing)
+ * Execute an Ultra order (POST signed transaction to /execute)
  */
 export async function executeUltraOrder(
-  orderId: string,
-  keypair: Keypair
+  requestId: string,
+  signedTransactionBase64: string
 ): Promise<string> {
-  console.log('[Jupiter Ultra] Executing order:', orderId);
+  console.log('[Jupiter Ultra] Executing order with signed transaction', { requestId });
 
   try {
-    // Step 1: Get unsigned transaction
+    // POST signed transaction AND requestId to /execute
     const response = await httpClient.post(
-      `${JUP_ULTRA_EXECUTE}/${orderId}`,
+      JUP_ULTRA_EXECUTE,
       {
-        publicKey: keypair.publicKey.toString()
+        signedTransaction: signedTransactionBase64,
+        requestId: requestId  // ✅ Required by API spec
       },
       {
         headers: getJupiterHeaders(),
@@ -108,37 +122,18 @@ export async function executeUltraOrder(
       }
     );
 
-    if (response.status !== 200 || !response.data?.transaction) {
-      throw new Error(`Ultra execute returned status ${response.status} or missing transaction`);
+    if (response.status !== 200 || !response.data?.signature) {
+      throw new Error(`Ultra execute returned status ${response.status} or missing signature`);
     }
 
-    const unsignedTxBase64 = response.data.transaction;
-    console.log('[Jupiter Ultra] Got unsigned transaction');
-
-    // Step 2: Decode and sign the transaction
-    const transactionBytes = Uint8Array.from(atob(unsignedTxBase64), c => c.charCodeAt(0));
-    const transaction = VersionedTransaction.deserialize(transactionBytes);
+    const signature = response.data.signature;
+    console.log('[Jupiter Ultra] ✅ Swap submitted:', {
+      signature,
+      status: response.data.status,
+      slot: response.data.slot
+    });
     
-    // Sign with keypair
-    transaction.sign([keypair]);
-
-    // Step 3: Submit to network
-    const connection = new Connection('https://api.mainnet-beta.solana.com');
-    const signature = await connection.sendRawTransaction(
-      transaction.serialize(),
-      { skipPreflight: false }
-    );
-
-    console.log('[Jupiter Ultra] Transaction submitted:', signature);
-
-    // Step 4: Wait for confirmation
-    const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-
-    if (confirmation.value.err) {
-      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-    }
-
-    console.log('[Jupiter Ultra] ✅ Swap successful:', signature);
+    // Transaction is already submitted by Jupiter, just return the signature
     return signature;
   } catch (e: any) {
     const err = unwrapAxiosError(e);
@@ -148,18 +143,36 @@ export async function executeUltraOrder(
 }
 
 /**
- * Complete Ultra swap flow (order + execute + sign + send)
+ * Complete Ultra swap flow (order + sign + execute)
  */
 export async function performUltraSwap(
   keypair: Keypair,
   params: UltraOrderParams
 ): Promise<string> {
   try {
-    // Step 1: Create order (quote + tx)
+    // Step 1: Create order (GET request - returns transaction in response)
     const order = await createUltraOrder(params);
+    
+    if (!order.transaction) {
+      throw new Error('No transaction returned from order');
+    }
 
-    // Step 2: Execute order (sign and send)
-    const signature = await executeUltraOrder(order.orderId, keypair);
+    console.log('[Jupiter Ultra] Signing transaction...');
+    
+    // Step 2: Decode, sign, and serialize the transaction
+    const transactionBytes = Uint8Array.from(atob(order.transaction), c => c.charCodeAt(0));
+    const transaction = VersionedTransaction.deserialize(transactionBytes);
+    
+    // Sign with keypair
+    transaction.sign([keypair]);
+    
+    // Convert signed transaction back to base64
+    const signedTransactionBase64 = Buffer.from(transaction.serialize()).toString('base64');
+    
+    console.log('[Jupiter Ultra] Transaction signed');
+    
+    // Step 3: Execute order (POST signed transaction + requestId to /execute)
+    const signature = await executeUltraOrder(order.orderId, signedTransactionBase64);
 
     return signature;
   } catch (error: any) {

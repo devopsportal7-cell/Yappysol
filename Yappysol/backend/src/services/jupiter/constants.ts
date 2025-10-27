@@ -19,7 +19,7 @@ export function getJupiterHeaders(): Record<string, string> {
 
   if (apiKey) {
     headers['x-api-key'] = apiKey;  // ✅ Lowercase as per Jupiter spec
-    console.log('[Jupiter] ✅ Using API key:', `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`);
+    console.log('[Jupiter] ✅ API key configured:', apiKey ? `Present (${apiKey.length} chars)` : 'Missing');
   } else {
     console.error('[Jupiter] ❌ JUPITER_API_KEY not configured - requests will fail!');
   }
