@@ -135,6 +135,38 @@ class UserPortfolioService {
             return 'Failed to fetch your portfolio. Please try again.';
         }
     }
+    async generatePortfolioAnalysis(walletAddress) {
+        try {
+            const tokens = await this.getUserPortfolioWithMetadata(walletAddress);
+            if (!tokens || tokens.length === 0) {
+                return 'Your portfolio is currently empty. Consider adding some tokens!';
+            }
+            // Calculate totals
+            const totalSolValue = tokens.reduce((sum, t) => {
+                if (t.symbol === 'SOL')
+                    return sum + t.balance;
+                return sum + (t.balanceUsd / t.price);
+            }, 0);
+            const totalUsdValue = tokens.reduce((sum, t) => sum + t.balanceUsd, 0);
+            // Generate AI analysis
+            const summary = `
+**📊 Portfolio Summary:**
+- **Holdings:** ${tokens.length} tokens
+- **Total SOL Value:** ${totalSolValue.toFixed(4)} SOL
+- **Total USD Value:** $${totalUsdValue.toFixed(2)}
+
+**Insights:**
+${tokens.length === 1 && tokens[0].symbol === 'SOL' ? '👋 You\'re holding native SOL - the backbone of Solana! This is a solid, safe position.' : ''}
+${tokens.length > 5 ? '🎯 You have good diversification across multiple tokens.' : ''}
+${totalUsdValue > 1000 ? '💰 Your portfolio value is substantial. Consider risk management strategies.' : '🏦 Your portfolio is growing. Keep learning about DeFi opportunities!'}
+`;
+            return summary;
+        }
+        catch (e) {
+            console.error('[UserPortfolioService] Error generating analysis:', e);
+            return '';
+        }
+    }
     async getUserPortfolioWithMetadata(walletAddress) {
         if (!config_1.default.HELIUS_API_KEY)
             throw new Error('HELIUS_API_KEY is not set');

@@ -470,11 +470,11 @@ Be enthusiastic about the Solana ecosystem!`;
 
   async chatWithOpenAI(message: string, context: any = {}) {
     try {
-      console.log('[chatWithOpenAI] Received message:', message);
-      console.log('[chatWithOpenAI] Context:', context);
-      console.log('[chatWithOpenAI] context.currentStep:', context.currentStep);
-      console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
-      console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
+    console.log('[chatWithOpenAI] Received message:', message);
+    console.log('[chatWithOpenAI] Context:', context);
+    console.log('[chatWithOpenAI] context.currentStep:', context.currentStep);
+    console.log('[chatWithOpenAI] typeof context.currentStep:', typeof context.currentStep);
+    console.log('[chatWithOpenAI] context.currentStep truthy:', !!context.currentStep);
     
       // Attempt to recover flowType from session if not present in context but currentStep is
       if (!context.flowType && context.currentStep && context.sessionId) {
@@ -520,8 +520,23 @@ Be enthusiastic about the Solana ecosystem!`;
         }
       }
     
-      // Check if we're in a step flow - this takes priority over intent detection
+      // 🔧 FIX: Check if user is interrupting the flow with a different intent
       if (context.currentStep && context.currentStep !== null && context.currentStep !== undefined) {
+        // Detect if user is asking for something completely different
+        const isPortfolioQueryNow = this.isPortfolioQuery(message);
+        const isPriceQueryNow = this.isPriceQuery(message);
+        const isSwapIntentNow = this.isSwapIntent(message);
+        const isCreateTokenIntentNow = this.isCreateTokenIntent(message);
+        const isTrendingQueryNow = this.isTrendingQuery(message);
+        
+        // If user wants to do something different (not continue the flow), reset the context
+        if (isPortfolioQueryNow || isPriceQueryNow || isSwapIntentNow || isCreateTokenIntentNow || isTrendingQueryNow) {
+          console.log('[chatWithOpenAI] 🔄 User interrupting flow with different intent - resetting context');
+          context.currentStep = null;
+          context.flowType = null;
+          // Continue with fresh intent detection below
+        } else {
+          // Continue with step flow
         console.log('[chatWithOpenAI] Continuing step flow:', context.currentStep);
         console.log('[chatWithOpenAI] Step flow context:', JSON.stringify(context, null, 2));
         
@@ -603,21 +618,21 @@ Be enthusiastic about the Solana ecosystem!`;
           // PRIORITY: Explicit flowType first, then context clues
           if (context.flowType === 'swap' || (context.fromToken || context.toToken)) {
             console.log('[chatWithOpenAI] Routing to: swap service (shared step - swap context)');
-            try {
-              const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
-              return {
-                prompt: swapResult.prompt,
-                step: swapResult.step,
+          try {
+            const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
+            return {
+              prompt: swapResult.prompt,
+              step: swapResult.step,
               action: 'swap',
               flowType: 'swap',
               unsignedTransaction: swapResult.unsignedTransaction,
-                requireSignature: swapResult.requireSignature,
-                swapDetails: swapResult.swapDetails
-              };
-            } catch (error) {
-              console.error('[chatWithOpenAI] Error in swap step continuation:', error);
-              return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
-            }
+              requireSignature: swapResult.requireSignature,
+              swapDetails: swapResult.swapDetails
+            };
+          } catch (error) {
+            console.error('[chatWithOpenAI] Error in swap step continuation:', error);
+            return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
+          }
           } else if (context.flowType === 'token-creation' || context.tokenName || context.tokenSymbol) {
             console.log('[chatWithOpenAI] Routing to: token creation service (shared step - creation context)');
             try {
@@ -644,6 +659,7 @@ Be enthusiastic about the Solana ecosystem!`;
             // Fall through to intent detection below
           }
         }
+        } // Close the else block for step continuation
     }
     
     // === INTELLIGENT INTENT CLASSIFICATION ===
@@ -894,6 +910,25 @@ You'll sign transactions to create the token and optionally set up a liquidity p
               };
             }
             try {
+              // Check if this is a "what do you think" analysis query
+              const lowerMessage = message.toLowerCase();
+              const isAnalysisQuery = lowerMessage.includes('what do you think') || 
+                                     lowerMessage.includes('how is my portfolio') ||
+                                     lowerMessage.includes('portfolio analysis') ||
+                                     lowerMessage.includes('analyze my portfolio');
+              
+              if (isAnalysisQuery) {
+                // Generate AI analysis instead of raw data
+                const analysis = await this.userPortfolioService.generatePortfolioAnalysis(walletAddress);
+                const portfolioData = await this.userPortfolioService.getUserPortfolioWithMetadata(walletAddress);
+                
+                return { 
+                  prompt: analysis,
+                  action: 'portfolio-analysis',
+                  actionData: { isAnalysis: true, tokens: portfolioData }
+                };
+              }
+              
               // Fetch portfolio data from cache
               const { balanceCacheService } = await import('../services/BalanceCacheService');
               const portfolio = await balanceCacheService.getFromCache(walletAddress);

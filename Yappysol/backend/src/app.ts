@@ -80,10 +80,15 @@ const initializeServices = async () => {
       console.log('⏸️ Background balance update service disabled (ENABLE_BACKGROUND_UPDATES=false)');
     }
 
-    // Initialize WebSocket subscriber
-    const { websocketBalanceSubscriber } = await import('./services/WebsocketBalanceSubscriber');
-    await websocketBalanceSubscriber.subscribeToAllUserWallets();
-    console.log('✅ WebSocket balance subscriber initialized');
+    // Initialize WebSocket subscriber (if enabled)
+    const enableWebSocketSubscriber = process.env.ENABLE_WEBSOCKET_CLIENT === 'true';
+    if (enableWebSocketSubscriber) {
+      const { websocketBalanceSubscriber } = await import('./services/WebsocketBalanceSubscriber');
+      await websocketBalanceSubscriber.subscribeToAllUserWallets();
+      console.log('✅ WebSocket balance subscriber initialized');
+    } else {
+      console.log('⏸️ WebSocket subscriber disabled (ENABLE_WEBSOCKET_CLIENT=false)');
+    }
 
     // Note: Frontend WebSocket server is now attached in index.ts
     // This ensures it shares the same HTTP server on Render
