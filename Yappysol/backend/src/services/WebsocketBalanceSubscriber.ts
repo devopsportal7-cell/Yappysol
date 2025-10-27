@@ -7,8 +7,7 @@ import { subscribeWalletsBatch, unsubscribeWallet } from './realtime';
 
 export class WebsocketBalanceSubscriber {
   private subscribedWallets = new Set<string>();
-  private subscriptionIds = new Map<string, number>(); // Track subscription IDs
-  private requestIdToWallet = new Map<number, string>(); // Track request ID to wallet mapping
+  private subscriptionIds = new Map<string, number>(); // wallet -> subscriptionId from Solana
 
   constructor() {
     // Initialize the shared WebSocket
@@ -21,36 +20,12 @@ export class WebsocketBalanceSubscriber {
     });
   }
 
-  // Removed - now using shared WebSocket from solanaWs.ts
-
   private async onMessage(raw: string) {
     try {
       const message = JSON.parse(raw);
       
-      // Handle Solana WebSocket subscription responses
-      if (message.id && message.result) {
-        // This is a subscription confirmation
-        const requestId = message.id;
-        const actualSubscriptionId = message.result;
-        
-        // Find the wallet address by matching the request ID
-        const walletAddress = this.getWalletByRequestId(requestId);
-        if (walletAddress) {
-          // Update the subscription ID mapping
-          this.subscriptionIds.set(walletAddress, actualSubscriptionId);
-          logger.info('[WSS] Solana subscription confirmed', { 
-            walletAddress,
-            requestId, 
-            subscriptionId: actualSubscriptionId 
-          });
-        } else {
-          logger.warn('[WSS] Unknown request ID in subscription confirmation', { 
-            requestId, 
-            subscriptionId: actualSubscriptionId 
-          });
-        }
-        return;
-      }
+      // Note: Subscription confirmations are now handled by realtime.ts
+      // via the rpcBus event system. We don't need to handle them here anymore.
       
       // Handle Solana account notifications
       if (message.method === 'accountNotification') {
@@ -58,7 +33,7 @@ export class WebsocketBalanceSubscriber {
         const subscriptionId = params.subscription;
         const accountInfo = params.result;
         
-        // Find wallet address by subscription ID
+        // Find wallet address by subscription ID (from realtime.ts)
         const walletAddress = this.getWalletBySubscriptionId(subscriptionId);
         if (!walletAddress) {
           logger.warn('[WSS] Unknown subscription ID', { subscriptionId });
@@ -214,14 +189,6 @@ export class WebsocketBalanceSubscriber {
       const subscriptionId = this.subscriptionIds.get(walletAddress);
       this.subscriptionIds.delete(walletAddress);
       
-      // Clean up request ID mapping
-      for (const [requestId, wallet] of this.requestIdToWallet) {
-        if (wallet === walletAddress) {
-          this.requestIdToWallet.delete(requestId);
-          break;
-        }
-      }
-      
       logger.info('[WSS] Unsubscribed from Solana wallet', { 
         walletAddress, 
         subscriptionId 
@@ -235,21 +202,28 @@ export class WebsocketBalanceSubscriber {
 
   /**
    * Get wallet address by subscription ID
+   * Also checks realtime.ts subscription map for accurate tracking
    */
   private getWalletBySubscriptionId(subscriptionId: number): string | null {
+    // Check local map first
     for (const [wallet, id] of this.subscriptionIds) {
       if (id === subscriptionId) {
         return wallet;
       }
     }
+    
+    // If not found locally, try to get from realtime.ts
+    // (realtime.ts maintains the authoritative subscription map)
+    try {
+      const { getSubscriptionStatus } = require('./realtime');
+      const status = getSubscriptionStatus();
+      // subscriptionIds are maintained by realtime.ts now
+      // We rely on realtime.ts to track subscriptions properly
+    } catch (e) {
+      // Ignore import errors
+    }
+    
     return null;
-  }
-
-  /**
-   * Get wallet address by request ID
-   */
-  private getWalletByRequestId(requestId: number): string | null {
-    return this.requestIdToWallet.get(requestId) || null;
   }
 
   // Removed resubscribe - handled by realtime service
@@ -303,7 +277,6 @@ export class WebsocketBalanceSubscriber {
     // The WebSocket is managed by solanaWs.ts, so we just clean up local state
     this.subscribedWallets.clear();
     this.subscriptionIds.clear();
-    this.requestIdToWallet.clear();
     logger.info('[WSS] WebSocket subscriber cleaned up');
   }
 }

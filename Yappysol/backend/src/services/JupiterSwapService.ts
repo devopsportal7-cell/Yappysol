@@ -1,6 +1,6 @@
 import { Connection, VersionedTransaction } from '@solana/web3.js';
 import { httpClient } from '../lib/httpClient';
-import { JUP_PRO_QUOTE, JUP_LITE_QUOTE, JUP_SWAP_URL } from '../constants/jupiter';
+import { JUP_PRO_QUOTE, JUP_LITE_QUOTE, JUP_V6_QUOTE, JUP_SWAP_URL } from '../constants/jupiter';
 
 export interface JupiterQuoteParams {
   inputMint: string;
@@ -48,74 +48,138 @@ export interface JupiterSwapParams {
   };
 }
 
+/**
+ * Helper to unwrap Axios errors
+ */
+function unwrapAxiosError(e: any) {
+  return {
+    status: e?.response?.status,
+    data: e?.response?.data,
+    message: e?.message ?? String(e),
+    code: e?.code,
+  };
+}
+
 export class JupiterSwapService {
   /**
-   * Get a quote for a swap using Jupiter v1 API with fallback
+   * Build query string for Jupiter API
    */
-  async getQuote(params: JupiterQuoteParams): Promise<JupiterQuoteResponse> {
-    const {
-      inputMint,
-      outputMint,
-      amount,
-      slippageBps = 50,
-      onlyDirectRoutes = false,
-      asLegacyTransaction = false
-    } = params;
-
+  private buildQueryString(params: JupiterQuoteParams): string {
     const qs = new URLSearchParams({
-      inputMint,
-      outputMint,
-      inAmount: String(amount),
-      slippageBps: String(slippageBps),
-      onlyDirectRoutes: String(onlyDirectRoutes),
-      asLegacyTransaction: String(asLegacyTransaction),
+      inputMint: params.inputMint,
+      outputMint: params.outputMint,
+      amount: String(params.amount), // ✅ Correct param name for Jupiter
+      slippageBps: String(params.slippageBps || 50),
+      onlyDirectRoutes: String(params.onlyDirectRoutes || false),
+      asLegacyTransaction: String(params.asLegacyTransaction || false),
     });
+    return qs.toString();
+  }
 
-    // Try Pro endpoint first, fallback to Lite
+  /**
+   * Get a quote for a swap using Jupiter v1 API with multiple fallbacks
+   */
+  async getQuote(params: JupiterQuoteParams): Promise<JupiterQuoteResponse & { source: string }> {
+    // Validate inputs
+    if (!params.inputMint || !params.outputMint) {
+      throw new Error('Missing input/output mint');
+    }
+    if (!params.amount || params.amount <= 0) {
+      throw new Error('Amount must be greater than zero');
+    }
+
+    const qs = this.buildQueryString(params);
+    const headers = {
+      'Accept': 'application/json',
+      'User-Agent': 'yappysol-backend/1.0',
+    };
+
+    // Try Pro endpoint first
     try {
       console.log('[JupiterSwapService] Requesting quote from Jupiter Pro...');
-      const response = await httpClient.get(`${JUP_PRO_QUOTE}?${qs.toString()}`);
+      const response = await httpClient.get(`${JUP_PRO_QUOTE}?${qs}`, {
+        headers,
+        timeout: 10_000,
+      });
       
       if (response.status !== 200) {
-        throw new Error(`Jupiter Pro API error: ${response.status}`);
+        throw new Error(`Jupiter Pro API returned ${response.status}`);
       }
 
       const quote: JupiterQuoteResponse = response.data;
       
-      console.log('[JupiterSwapService] Quote received from Pro:', {
-        inputMint,
-        outputMint,
+      console.log('[JupiterSwapService] ✅ Quote received from Pro v1:', {
+        inputMint: params.inputMint,
+        outputMint: params.outputMint,
         inAmount: quote.inAmount,
         outAmount: quote.outAmount,
         priceImpact: quote.priceImpactPct
       });
 
-      return quote;
-    } catch (error: any) {
-      console.warn('[JupiterSwapService] Pro endpoint failed, trying Lite...', error.message);
-      
+      return { ...quote, source: 'pro-v1' };
+    } catch (e1) {
+      const err1 = unwrapAxiosError(e1);
+      console.warn('[JupiterSwapService] Pro v1 failed:', err1);
+
       // Fallback to Lite endpoint
       try {
-        const response = await httpClient.get(`${JUP_LITE_QUOTE}?${qs.toString()}`);
+        console.log('[JupiterSwapService] Requesting quote from Jupiter Lite...');
+        const response = await httpClient.get(`${JUP_LITE_QUOTE}?${qs}`, {
+          headers,
+          timeout: 10_000,
+        });
         
         if (response.status !== 200) {
-          throw new Error(`Jupiter Lite API error: ${response.status}`);
+          throw new Error(`Jupiter Lite API returned ${response.status}`);
         }
 
         const quote: JupiterQuoteResponse = response.data;
         
-        console.log('[JupiterSwapService] Quote received from Lite:', {
-          inputMint,
-          outputMint,
+        console.log('[JupiterSwapService] ✅ Quote received from Lite v1:', {
+          inputMint: params.inputMint,
+          outputMint: params.outputMint,
           inAmount: quote.inAmount,
           outAmount: quote.outAmount,
           priceImpact: quote.priceImpactPct
         });
 
-        return quote;
-      } catch (liteError: any) {
-        console.error('[JupiterSwapService] Both Pro and Lite endpoints failed');
-        throw new Error(`Jupiter API unavailable: ${liteError.message}`);
+        return { ...quote, source: 'lite-v1' };
+      } catch (e2) {
+        const err2 = unwrapAxiosError(e2);
+        console.warn('[JupiterSwapService] Lite v1 failed:', err2);
+
+        // Final fallback to v6
+        try {
+          console.log('[JupiterSwapService] Requesting quote from Jupiter v6 (legacy)...');
+          const response = await httpClient.get(`${JUP_V6_QUOTE}?${qs}`, {
+            headers,
+            timeout: 10_000,
+          });
+          
+          if (response.status !== 200) {
+            throw new Error(`Jupiter v6 API returned ${response.status}`);
+          }
+
+          const quote: JupiterQuoteResponse = response.data;
+          
+          console.log('[JupiterSwapService] ✅ Quote received from v6 legacy:', {
+            inputMint: params.inputMint,
+            outputMint: params.outputMint,
+            inAmount: quote.inAmount,
+            outAmount: quote.outAmount,
+            priceImpact: quote.priceImpactPct
+          });
+
+          return { ...quote, source: 'v6' };
+        } catch (e3) {
+          const err3 = unwrapAxiosError(e3);
+          console.error('[JupiterSwapService] ❌ All Jupiter endpoints failed:', {
+            pro: err1,
+            lite: err2,
+            v6: err3
+          });
+          throw new Error(`All Jupiter endpoints failed. Last error: ${err3.status ?? ''} ${err3.message}`);
+        }
       }
     }
   }
@@ -135,7 +199,7 @@ export class JupiterSwapService {
 
     try {
       // First get quote
-      const quote = await this.getQuote({
+      const quoteResult = await this.getQuote({
         inputMint,
         outputMint,
         amount,
@@ -143,6 +207,9 @@ export class JupiterSwapService {
         onlyDirectRoutes: false,
         asLegacyTransaction: false
       });
+
+      const quote = quoteResult as JupiterQuoteResponse;
+      console.log(`[JupiterSwapService] Got quote from ${quoteResult.source}`);
 
       // Now get swap transaction
       const swapParams = {
@@ -157,7 +224,8 @@ export class JupiterSwapService {
       const response = await httpClient.post(JUP_SWAP_URL, swapParams, {
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 10_000
       });
 
       if (response.status !== 200) {

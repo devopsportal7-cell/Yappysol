@@ -57,6 +57,20 @@ export function getWs(): WebSocket {
 function handleMessage(data: string) {
   try {
     const msg = JSON.parse(data);
+    
+    // Handle JSON-RPC responses with an id
+    if (msg && typeof msg === 'object' && 'id' in msg && msg.id != null) {
+      const idNum = Number(msg.id);
+      if (!Number.isNaN(idNum)) {
+        // Emit RPC response event
+        import('./rpcBus').then(({ onRpcResponse }) => {
+          onRpcResponse(idNum, msg);
+        }).catch(() => {
+          // Ignore if rpcBus not loaded yet
+        });
+      }
+    }
+    
     // Handle subscription confirmations, account notifications, etc.
     // This can be routed to external handlers
   } catch (e) {
