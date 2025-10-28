@@ -36,8 +36,14 @@ export interface ActivityItem {
  * Get unified activity feed for a user (launches, swaps, transfers, external transactions)
  */
 router.get('/', authMiddleware, asyncHandler(async (req, res) => {
+  console.log('[ACTIVITY] Request received', { 
+    userId: req.user?.id,
+    query: req.query 
+  });
+
   const userId = req.user?.id;
   if (!userId) {
+    console.error('[ACTIVITY] User not authenticated');
     return res.status(401).json({ error: 'User not authenticated' });
   }
 
@@ -45,12 +51,20 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
 
+    console.log('[ACTIVITY] Fetching activities', { userId, limit, offset });
+
     // Fetch all activity types in parallel
     const [launches, swaps, externalTxs] = await Promise.all([
       getLaunches(userId, limit),
       getSwaps(userId, limit),
       getExternalTransactions(userId, limit)
     ]);
+
+    console.log('[ACTIVITY] Fetched data', { 
+      launches: launches.length, 
+      swaps: swaps.length, 
+      externalTxs: externalTxs.length 
+    });
 
     // Combine all activities and sort by timestamp
     const activities: ActivityItem[] = [
@@ -62,6 +76,11 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
     // Apply limit and offset
     const paginatedActivities = activities.slice(offset, offset + limit);
 
+    console.log('[ACTIVITY] Returning activities', { 
+      total: activities.length, 
+      returned: paginatedActivities.length 
+    });
+
     res.json({
       activities: paginatedActivities,
       total: activities.length,
@@ -69,7 +88,11 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
       offset
     });
   } catch (error: any) {
-    console.error('[ACTIVITY] Error fetching activity:', error);
+    console.error('[ACTIVITY] Error fetching activity:', {
+      error: error.message,
+      stack: error.stack,
+      userId
+    });
     res.status(500).json({ error: 'Failed to fetch activity feed' });
   }
 }));
