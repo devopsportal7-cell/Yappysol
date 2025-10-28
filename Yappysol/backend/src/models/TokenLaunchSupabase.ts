@@ -209,12 +209,33 @@ export class TokenLaunchModel {
   }
 
   static async updateLaunch(id: string, updates: UpdateTokenLaunchData): Promise<TokenLaunch | null> {
-    const updateData = {
-      ...updates,
+    // Map camelCase to snake_case for Supabase
+    const updateData: any = {
       updated_at: new Date().toISOString(),
       ...(updates.status === 'completed' && { completed_at: new Date().toISOString() }),
       ...(updates.currentPriceUsd && { last_price_update: new Date().toISOString() })
     };
+
+    // Map camelCase interface fields to snake_case database columns
+    if (updates.mintAddress !== undefined) updateData.mint_address = updates.mintAddress;
+    if (updates.transactionSignature !== undefined) updateData.transaction_signature = updates.transactionSignature;
+    if (updates.unsignedTransaction !== undefined) updateData.unsigned_transaction = updates.unsignedTransaction;
+    if (updates.status !== undefined) updateData.status = updates.status;
+    if (updates.errorMessage !== undefined) updateData.error_message = updates.errorMessage;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.imageUrl !== undefined) updateData.image_url = updates.imageUrl;
+    if (updates.twitterUrl !== undefined) updateData.twitter_url = updates.twitterUrl;
+    if (updates.telegramUrl !== undefined) updateData.telegram_url = updates.telegramUrl;
+    if (updates.websiteUrl !== undefined) updateData.website_url = updates.websiteUrl;
+    if (updates.launchAmount !== undefined) updateData.launch_amount = updates.launchAmount;
+    if (updates.initialSupply !== undefined) updateData.initial_supply = updates.initialSupply;
+    if (updates.decimals !== undefined) updateData.decimals = updates.decimals;
+    if (updates.currentPriceUsd !== undefined) updateData.current_price_usd = updates.currentPriceUsd;
+    if (updates.marketCapUsd !== undefined) updateData.market_cap_usd = updates.marketCapUsd;
+    if (updates.priceChange24h !== undefined) updateData.price_change_24h = updates.priceChange24h;
+    if (updates.volume24hUsd !== undefined) updateData.volume_24h_usd = updates.volume24hUsd;
+    if (updates.liquidityUsd !== undefined) updateData.liquidity_usd = updates.liquidityUsd;
+    if (updates.holdersCount !== undefined) updateData.holders_count = updates.holdersCount;
 
     const { data, error } = await supabase
       .from(TABLES.TOKEN_LAUNCHES)

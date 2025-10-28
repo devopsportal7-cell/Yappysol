@@ -952,26 +952,80 @@ export class TokenCreationService {
           transaction = Transaction.from(transactionBytes);
         }
         
-        // Sign the transaction
-        let signature: string;
-        const connection = new Connection('https://api.mainnet-beta.solana.com');
+        // Sign the transaction with BOTH keypairs (mint AND user)
+        // According to PumpPortal docs: tx.sign([mintKeypair, signerKeyPair])
+        let signature: string | undefined;
+        
+        // Use Helius RPC instead of public Solana RPC to avoid rate limits
+        const heliusRpcUrl = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com';
+        const connection = new Connection(heliusRpcUrl);
         
         if (transaction instanceof VersionedTransaction) {
-          transaction.sign([userKeypair]);
-          signature = await connection.sendRawTransaction(transaction.serialize());
-          console.log('[DEBUG] Pump transaction signed and submitted (VersionedTransaction):', signature);
+          transaction.sign([mintKeypair, userKeypair]); // BOTH keypairs must sign
+          
+          // Add retry logic for rate limits
+          let retries = 3;
+          while (retries > 0) {
+            try {
+              signature = await connection.sendRawTransaction(transaction.serialize(), {
+                skipPreflight: true, // Skip preflight to avoid extra RPC calls
+                maxRetries: 0 // We'll handle retries manually
+              });
+              console.log('[DEBUG] Pump transaction signed and submitted (VersionedTransaction):', signature);
+              break;
+            } catch (error: any) {
+              retries--;
+              if (error.message && error.message.includes('429') && retries > 0) {
+                console.log(`[DEBUG] Rate limited, retrying in ${3 - retries} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, (4 - retries) * 1000));
+              } else {
+                throw error;
+              }
+            }
+          }
         } else {
-          (transaction as Transaction).sign(userKeypair);
-          signature = await connection.sendRawTransaction((transaction as Transaction).serialize());
-          console.log('[DEBUG] Pump transaction signed and submitted (Legacy Transaction):', signature);
+          // Legacy transactions need to be signed with the first keypair only
+          (transaction as Transaction).sign(mintKeypair);
+          (transaction as Transaction).partialSign(userKeypair);
+          
+          // Add retry logic for rate limits
+          let retries = 3;
+          while (retries > 0) {
+            try {
+              signature = await connection.sendRawTransaction((transaction as Transaction).serialize(), {
+                skipPreflight: true,
+                maxRetries: 0
+              });
+              console.log('[DEBUG] Pump transaction signed and submitted (Legacy Transaction):', signature);
+              break;
+            } catch (error: any) {
+              retries--;
+              if (error.message && error.message.includes('429') && retries > 0) {
+                console.log(`[DEBUG] Rate limited, retrying in ${3 - retries} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, (4 - retries) * 1000));
+              } else {
+                throw error;
+              }
+            }
+          }
+        }
+        
+        // Ensure signature was obtained
+        if (!signature) {
+          throw new Error('Failed to obtain transaction signature after retries');
         }
         
         // Update launch record with success
-        await TokenLaunchModel.updateLaunch(launchRecord.id, {
-          mintAddress: mintKeypair.publicKey.toBase58(),
-          transactionSignature: signature,
-          status: 'completed'
-        });
+        try {
+          await TokenLaunchModel.updateLaunch(launchRecord.id, {
+            mintAddress: mintKeypair.publicKey.toBase58(), // Store mint address
+            transactionSignature: signature,
+            status: 'completed'
+          });
+        } catch (updateError: any) {
+          console.error('[TokenCreationService] Failed to update launch record:', updateError);
+          // Continue even if update fails
+        }
 
         // Start price tracking for the new token
         setTimeout(async () => {
@@ -1005,10 +1059,9 @@ export class TokenCreationService {
       } catch (signingError: any) {
         console.error('[ERROR] Failed to sign Pump transaction:', signingError);
         
-        // Update launch record with failure (omit errorMessage if column doesn't exist in DB)
+        // Update launch record with failure (omit fields that don't exist in DB)
         try {
           await TokenLaunchModel.updateLaunch(launchRecord.id, {
-            mintAddress: mintKeypair.publicKey.toBase58(),
             status: 'failed'
           });
         } catch (updateError: any) {
