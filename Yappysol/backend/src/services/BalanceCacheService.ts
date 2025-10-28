@@ -192,7 +192,7 @@ export class BalanceCacheService {
   /**
    * Get token balances from cache
    */
-  private async getTokenBalancesFromCache(walletAddress: string): Promise<TokenBalance[]> {
+  async getTokenBalancesFromCache(walletAddress: string): Promise<TokenBalance[]> {
     try {
       const { data, error } = await supabase
         .from('token_balance_cache')

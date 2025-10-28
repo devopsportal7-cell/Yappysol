@@ -559,15 +559,35 @@ class TokenSwapService {
                     delete exports.swapSessions[userId];
                     return { prompt: 'No wallet found. Please create or import a wallet first.', step: null };
                 }
-                // Validate wallet has sufficient balance
+                // Calculate fees for the swap
                 const fees = WalletService_1.WalletService.calculateTransactionFees('token-swap', amount);
-                const balanceCheck = await WalletService_1.WalletService.hasSufficientBalance(walletInfo.id, amount, fees);
-                if (!balanceCheck.sufficient) {
-                    delete exports.swapSessions[userId];
-                    return {
-                        prompt: `Insufficient balance. Need ${balanceCheck.required?.toFixed(6)} SOL, have ${balanceCheck.currentBalance.toFixed(6)} SOL. Please add ${balanceCheck.shortfall?.toFixed(6)} SOL to your wallet.`,
-                        step: null
-                    };
+                // Validate wallet has sufficient balance
+                // For SOL -> Token: check SOL balance
+                // For Token -> SOL: check token balance
+                if (action === 'buy') {
+                    // Buying with SOL, check SOL balance
+                    const balanceCheck = await WalletService_1.WalletService.hasSufficientBalance(walletInfo.id, amount, fees);
+                    if (!balanceCheck.sufficient) {
+                        delete exports.swapSessions[userId];
+                        return {
+                            prompt: `Insufficient balance. Need ${balanceCheck.required?.toFixed(6)} SOL, have ${balanceCheck.currentBalance.toFixed(6)} SOL. Please add ${balanceCheck.shortfall?.toFixed(6)} SOL to your wallet.`,
+                            step: null
+                        };
+                    }
+                }
+                else if (action === 'sell') {
+                    // Selling token for SOL, check token balance
+                    const { balanceCacheService } = await Promise.resolve().then(() => __importStar(require('./BalanceCacheService')));
+                    const tokenBalances = await balanceCacheService.getTokenBalancesFromCache(walletInfo.publicKey);
+                    const tokenBalance = tokenBalances.find(t => t.mint === mint);
+                    if (!tokenBalance || tokenBalance.uiAmount < amount) {
+                        const tokenSymbol = POPULAR_TOKENS.find(t => t.mint === mint)?.symbol || mint.slice(0, 8);
+                        delete exports.swapSessions[userId];
+                        return {
+                            prompt: `Insufficient ${tokenSymbol} balance. Need ${amount} ${tokenSymbol}, have ${tokenBalance?.uiAmount?.toFixed(6) || 0} ${tokenSymbol}.`,
+                            step: null
+                        };
+                    }
                 }
                 const swapRequest = {
                     publicKey: walletInfo.publicKey,
