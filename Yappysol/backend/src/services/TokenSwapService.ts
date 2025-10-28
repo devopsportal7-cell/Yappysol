@@ -699,6 +699,39 @@ export class TokenSwapService {
                   throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
                 }
                 
+                // Log swap to database
+                try {
+                  await swapTrackingService.recordSwap({
+                    user_id: userId,
+                    wallet_id: walletInfo.id,
+                    from_token_mint: session.fromToken,
+                    from_token_symbol: POPULAR_TOKENS.find(t => t.mint === session.fromToken)?.symbol,
+                    from_token_amount: session.amount,
+                    to_token_mint: session.toToken,
+                    to_token_symbol: POPULAR_TOKENS.find(t => t.mint === session.toToken)?.symbol,
+                    transaction_signature: signature,
+                    execution_provider: 'pumpportal',
+                    status: 'confirmed',
+                    solscan_url: `https://solscan.io/tx/${signature}`,
+                    slippage_bps: 50
+                  });
+                  console.log('[TokenSwapService] Swap logged to database');
+                } catch (trackError) {
+                  console.error('[TokenSwapService] Failed to log swap to database:', trackError);
+                }
+                
+                // Wait a bit for the transaction to propagate on the blockchain
+                // Then trigger wallet refresh to update balance
+                setTimeout(async () => {
+                  try {
+                    const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+                    requestWalletRefresh(walletInfo.publicKey, true);
+                    console.log('[TokenSwapService] Wallet refresh requested for:', walletInfo.publicKey);
+                  } catch (refreshError) {
+                    console.error('[TokenSwapService] Failed to refresh wallet:', refreshError);
+                  }
+                }, 3000); // Wait 3 seconds for Helius/RPC nodes to catch up
+                
                 delete swapSessions[userId];
                 
                 // Success message - simplified since we already have the signature
@@ -798,14 +831,17 @@ export class TokenSwapService {
               console.error('[TokenSwapService] Failed to log swap to database:', trackError);
             }
             
-            // Trigger wallet refresh to update balance
-            try {
-              const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
-              requestWalletRefresh(walletInfo.publicKey, true);
-              console.log('[TokenSwapService] Wallet refresh requested for:', walletInfo.publicKey);
-            } catch (refreshError) {
-              console.error('[TokenSwapService] Failed to refresh wallet:', refreshError);
-            }
+            // Wait a bit for the transaction to propagate on the blockchain
+            // Then trigger wallet refresh to update balance
+            setTimeout(async () => {
+              try {
+                const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+                requestWalletRefresh(walletInfo.publicKey, true);
+                console.log('[TokenSwapService] Wallet refresh requested for:', walletInfo.publicKey);
+              } catch (refreshError) {
+                console.error('[TokenSwapService] Failed to refresh wallet:', refreshError);
+              }
+            }, 3000); // Wait 3 seconds for Helius/RPC nodes to catch up
             
             // Success message
             const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
@@ -862,6 +898,39 @@ export class TokenSwapService {
                 amount: amountLamports,
                 slippageBps: 50
               });
+              
+              // Log swap to database
+              try {
+                await swapTrackingService.recordSwap({
+                  user_id: userId,
+                  wallet_id: walletInfo.id,
+                  from_token_mint: session.fromToken,
+                  from_token_symbol: POPULAR_TOKENS.find(t => t.mint === session.fromToken)?.symbol,
+                  from_token_amount: session.amount,
+                  to_token_mint: session.toToken,
+                  to_token_symbol: POPULAR_TOKENS.find(t => t.mint === session.toToken)?.symbol,
+                  transaction_signature: signature,
+                  execution_provider: 'jupiter',
+                  status: 'confirmed',
+                  solscan_url: `https://solscan.io/tx/${signature}`,
+                  slippage_bps: 50
+                });
+                console.log('[TokenSwapService] Swap logged to database');
+              } catch (trackError) {
+                console.error('[TokenSwapService] Failed to log swap to database:', trackError);
+              }
+              
+              // Wait a bit for the transaction to propagate on the blockchain
+              // Then trigger wallet refresh to update balance
+              setTimeout(async () => {
+                try {
+                  const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+                  requestWalletRefresh(walletInfo.publicKey, true);
+                  console.log('[TokenSwapService] Wallet refresh requested for:', walletInfo.publicKey);
+                } catch (refreshError) {
+                  console.error('[TokenSwapService] Failed to refresh wallet:', refreshError);
+                }
+              }, 3000); // Wait 3 seconds for Helius/RPC nodes to catch up
               
               const fromTokenObj = POPULAR_TOKENS.find(t => t.mint === session.fromToken) || { symbol: session.fromToken };
               const toTokenObj = POPULAR_TOKENS.find(t => t.mint === session.toToken) || { symbol: session.toToken };

@@ -6,7 +6,7 @@ const inFlight = new Map<string, Promise<void>>();
 const globalQueue = new PQueue({ concurrency: 6 });
 
 const DEBOUNCE_MS = 800;
-const IMMEDIATE_REFRESH_MS = 100;
+const IMMEDIATE_REFRESH_MS = 3000; // Increased to 3 seconds to allow Helius to propagate transaction
 
 /**
  * Request wallet refresh with debouncing
