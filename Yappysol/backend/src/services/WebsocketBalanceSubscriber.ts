@@ -119,44 +119,22 @@ export class WebsocketBalanceSubscriber {
 
   /**
    * Check for external transactions when account changes detected
+   * NOTE: This is now a NO-OP since transactions are detected via Helius webhooks
+   * The WebSocket is still used for triggering balance refreshes
    */
   private async checkForExternalTransactions(
     walletAddress: string, 
     notificationReceivedTimestamp: number
   ): Promise<void> {
     try {
-      logger.info('[WSS] Checking for external transactions', { walletAddress });
+      logger.info('[WSS] Account change detected - balance refresh triggered', { walletAddress });
       
-      // Check for external deposits
-      const externalTxs = await externalTransactionService.checkForExternalDeposits(walletAddress);
+      // External transactions are now handled by Helius webhooks
+      // No need to poll Helius API - webhooks provide all transaction data
       
-      if (externalTxs.length > 0) {
-        logger.info(`[WSS] Found ${externalTxs.length} new external transactions`, {
-          wallet: walletAddress,
-          count: externalTxs.length,
-          transactions: externalTxs.map(tx => ({
-            signature: tx.signature,
-            amount: tx.amount,
-            tokenSymbol: tx.tokenSymbol,
-            sender: tx.sender,
-            blockTime: tx.blockTime
-          }))
-        });
-        
-        // Get user ID and store transactions
-        const userId = await externalTransactionService.getUserIdByWallet(walletAddress);
-        if (userId) {
-          for (const tx of externalTxs) {
-            await externalTransactionService.storeExternalTransaction(
-              tx, 
-              userId,
-              notificationReceivedTimestamp
-            );
-          }
-        }
-      }
+      logger.info('[WSS] Transaction detection now handled by Helius webhooks', { walletAddress });
     } catch (error) {
-      logger.error('[WSS] Error checking external transactions', { error, walletAddress });
+      logger.error('[WSS] Error processing account change', { error, walletAddress });
     }
   }
 

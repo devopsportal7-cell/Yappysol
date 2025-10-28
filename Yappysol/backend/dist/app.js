@@ -56,6 +56,7 @@ const walletBalance_1 = __importDefault(require("./routes/walletBalance"));
 const activity_1 = __importDefault(require("./routes/activity"));
 const diagnostics_1 = __importDefault(require("./routes/diagnostics"));
 const health_1 = __importDefault(require("./routes/health"));
+const webhooks_1 = __importDefault(require("./routes/webhooks"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // Initialize Moralis
@@ -103,6 +104,7 @@ app.use('/api/wallet', walletBalance_1.default);
 app.use('/api/activity', activity_1.default);
 app.use('/api/diagnostics', diagnostics_1.default);
 app.use('/health', health_1.default);
+app.use('/api/webhooks', webhooks_1.default);
 // Initialize background services
 const initializeServices = async () => {
     try {
@@ -134,6 +136,16 @@ const initializeServices = async () => {
         const { externalTransactionService } = await Promise.resolve().then(() => __importStar(require('./services/ExternalTransactionService')));
         await externalTransactionService.loadPlatformWallets();
         console.log('✅ External transaction service initialized');
+        // Initialize Helius webhook for transaction detection
+        try {
+            const { heliusWebhookService } = await Promise.resolve().then(() => __importStar(require('./services/HeliusWebhookService')));
+            await heliusWebhookService.initializeWithAllWallets();
+            console.log('✅ Helius webhook service initialized - Transaction detection via webhooks enabled');
+        }
+        catch (error) {
+            console.error('❌ Error initializing Helius webhook:', error);
+            // Don't crash the app if webhook setup fails
+        }
     }
     catch (error) {
         console.error('❌ Error initializing services:', error);

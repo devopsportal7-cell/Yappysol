@@ -80,6 +80,21 @@ export class WalletModel {
       throw new Error(`Failed to create wallet: ${error.message}`);
     }
 
+    // Add wallet to Helius webhook monitoring
+    try {
+      const { heliusWebhookService } = await import('../services/HeliusWebhookService');
+      const currentAddresses = await heliusWebhookService.getWebhookAddresses();
+      
+      // Add this new wallet to the webhook
+      if (!currentAddresses.includes(publicKey)) {
+        await heliusWebhookService.addWalletAddresses([publicKey]);
+        console.log('[WalletModel] Added wallet to Helius webhook monitoring:', publicKey);
+      }
+    } catch (error) {
+      console.error('[WalletModel] Failed to add wallet to Helius webhook:', error);
+      // Don't fail wallet creation if webhook fails
+    }
+
     return wallet;
   }
 

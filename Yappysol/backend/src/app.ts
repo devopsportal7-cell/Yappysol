@@ -18,6 +18,7 @@ import walletBalanceRoutes from './routes/walletBalance';
 import activityRoutes from './routes/activity';
 import diagnosticsRoutes from './routes/diagnostics';
 import healthRoutes from './routes/health';
+import webhookRoutes from './routes/webhooks';
 
 dotenv.config();
 
@@ -71,6 +72,7 @@ app.use('/api/wallet', walletBalanceRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/diagnostics', diagnosticsRoutes);
 app.use('/health', healthRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Initialize background services
 const initializeServices = async () => {
@@ -104,6 +106,16 @@ const initializeServices = async () => {
     const { externalTransactionService } = await import('./services/ExternalTransactionService');
     await externalTransactionService.loadPlatformWallets();
     console.log('✅ External transaction service initialized');
+
+    // Initialize Helius webhook for transaction detection
+    try {
+      const { heliusWebhookService } = await import('./services/HeliusWebhookService');
+      await heliusWebhookService.initializeWithAllWallets();
+      console.log('✅ Helius webhook service initialized - Transaction detection via webhooks enabled');
+    } catch (error) {
+      console.error('❌ Error initializing Helius webhook:', error);
+      // Don't crash the app if webhook setup fails
+    }
 
   } catch (error) {
     console.error('❌ Error initializing services:', error);

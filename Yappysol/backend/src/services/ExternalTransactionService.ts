@@ -197,6 +197,67 @@ export class ExternalTransactionService {
   }
 
   /**
+   * Store external transaction from webhook
+   * New simplified method that doesn't require API polling
+   */
+  async storeWebhookTransaction(
+    transaction: ExternalTransaction,
+    userId: string
+  ): Promise<void> {
+    try {
+      const now = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('external_transactions')
+        .upsert({
+          user_id: userId,
+          signature: transaction.signature,
+          block_time: transaction.blockTime,
+          amount: transaction.amount,
+          token_mint: transaction.tokenMint,
+          token_symbol: transaction.tokenSymbol,
+          token_name: transaction.tokenName,
+          sender: transaction.sender,
+          recipient: transaction.recipient,
+          type: transaction.type,
+          value_usd: transaction.valueUsd,
+          solscan_url: transaction.solscanUrl,
+          created_at: now,
+          updated_at: now
+        }, { onConflict: 'signature' });
+
+      if (error) {
+        logger.error('[EXTERNAL_TX] Error storing webhook transaction', { error, transaction });
+        return;
+      }
+
+      logger.info('[EXTERNAL_TX] Stored webhook transaction', {
+        signature: transaction.signature,
+        userId,
+        amount: transaction.amount,
+        tokenSymbol: transaction.tokenSymbol,
+      });
+
+      // Trigger balance update for recipient wallet
+      if (transaction.recipient) {
+        const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+        requestWalletRefresh(transaction.recipient, true);
+
+        // Emit SSE event for instant UI update
+        const { emitWalletUpdated } = await import('../lib/events');
+        emitWalletUpdated(transaction.recipient, 'external_tx', {
+          transactionHash: transaction.signature,
+          amount: transaction.amount,
+          tokenSymbol: transaction.tokenSymbol,
+          valueUsd: transaction.valueUsd
+        });
+      }
+    } catch (error) {
+      logger.error('[EXTERNAL_TX] Error storing webhook transaction', { error, transaction });
+    }
+  }
+
+  /**
    * Store external transaction and trigger balance update
    */
   async storeExternalTransaction(
