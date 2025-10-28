@@ -38,36 +38,36 @@ export class HeliusWebhookService {
       const existingWebhooks = await this.getAllWebhooks();
       
       if (existingWebhooks && existingWebhooks.length > 0) {
-        // Find our webhook by URL
-        const ourWebhook = existingWebhooks.find(w => w.webhook_url === this.webhookUrl);
+        logger.info('[HELIUS_WEBHOOK] Found existing webhooks', { 
+          count: existingWebhooks.length,
+          allWebhookIds: existingWebhooks.map(w => w.id || w.webhook_id || w.webhookID)
+        });
+        
+        // Try different possible field names (Helius API might use different casing)
+        const ourWebhook = existingWebhooks.find(w => {
+          const url = w.webhook_url || w.webhookURL || w.webhookUrl || w.url;
+          return url === this.webhookUrl;
+        });
+        
         if (ourWebhook) {
-          this.webhookId = ourWebhook.webhook_id;
-          logger.info('[HELIUS_WEBHOOK] Using existing webhook', { webhookId: this.webhookId });
+          this.webhookId = ourWebhook.id || ourWebhook.webhook_id || ourWebhook.webhookID;
+          logger.info('[HELIUS_WEBHOOK] Using existing webhook', { 
+            webhookId: this.webhookId,
+            webhookUrl: ourWebhook.webhook_url || ourWebhook.webhookURL || ourWebhook.webhookUrl
+          });
           return this.webhookId;
+        } else {
+          logger.warn('[HELIUS_WEBHOOK] No matching webhook found by URL', { 
+            searchUrl: this.webhookUrl,
+            availableUrls: existingWebhooks.map(w => w.webhook_url || w.webhookURL || w.webhookUrl || w.url || 'NO URL FIELD FOUND')
+          });
         }
       }
 
-      // Create new webhook
-      logger.info('[HELIUS_WEBHOOK] Creating new webhook', { webhookUrl: this.webhookUrl });
-      
-      const response = await httpClient.post(
-        `${this.baseUrl}/v0/webhooks?api-key=${this.apiKey}`,
-        {
-          webhookURL: this.webhookUrl,
-          transactionTypes: ['TRANSFER', 'SWAP'], // Monitor all transfers and swaps
-          webhookType: 'enhanced',
-          accountAddresses: [] // Will be added dynamically
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      this.webhookId = response.data.webhookID;
-      logger.info('[HELIUS_WEBHOOK] Webhook created successfully', { webhookId: this.webhookId });
-      return this.webhookId;
+      // Don't try to create - webhook already exists in dashboard
+      logger.warn('[HELIUS_WEBHOOK] Webhook does not exist in Helius or could not be found by URL');
+      logger.info('[HELIUS_WEBHOOK] Skipping webhook creation - webhook should be created manually in dashboard at https://dashboard.helius.dev/webhooks');
+      return null; // Return null so the app doesn't crash, but logs show warning
     } catch (error: any) {
       logger.error('[HELIUS_WEBHOOK] Error initializing webhook', { 
         error: error.message,
@@ -86,6 +86,10 @@ export class HeliusWebhookService {
       const response = await httpClient.get(
         `${this.baseUrl}/v0/webhooks?api-key=${this.apiKey}`
       );
+      logger.info('[HELIUS_WEBHOOK] Retrieved webhooks from Helius', { 
+        count: response.data?.length || 0,
+        webhooks: response.data 
+      });
       return response.data || [];
     } catch (error: any) {
       logger.error('[HELIUS_WEBHOOK] Error getting webhooks', { error: error.message });
@@ -108,10 +112,16 @@ export class HeliusWebhookService {
         addressCount: addresses.length 
       });
 
+      // Get current addresses and merge with new ones
+      const currentAddresses = await this.getWebhookAddresses();
+      const allAddresses = [...new Set([...currentAddresses, ...addresses])];
+
       const response = await httpClient.put(
         `${this.baseUrl}/v0/webhooks/${this.webhookId}?api-key=${this.apiKey}`,
         {
-          accountAddresses: addresses
+          webhookURL: this.webhookUrl,
+          transactionTypes: ['Any'],
+          accountAddresses: allAddresses
         },
         {
           headers: {
@@ -122,7 +132,8 @@ export class HeliusWebhookService {
 
       logger.info('[HELIUS_WEBHOOK] Wallet addresses added successfully', { 
         webhookId: this.webhookId,
-        addedCount: addresses.length
+        addedCount: addresses.length,
+        totalAddresses: allAddresses.length
       });
       return true;
     } catch (error: any) {
