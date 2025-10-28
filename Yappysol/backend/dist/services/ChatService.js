@@ -1025,6 +1025,24 @@ You'll sign transactions to create the token and optionally set up a liquidity p
                         }
                         case 'help': {
                             console.log('[chatWithOpenAI] AI-routed to: help service');
+                            // If this is an educational/knowledge question (not about how to use the bot), route to RAG
+                            const educationalKeywords = ['earn', 'make money', 'learn about', 'understand', 'what is', 'how does'];
+                            const isEducationalQuestion = educationalKeywords.some(keyword => message.toLowerCase().includes(keyword));
+                            if (isEducationalQuestion) {
+                                console.log('[chatWithOpenAI] Educational question detected, routing to RAG instead of help');
+                                try {
+                                    const ragResult = await this.ragService.answerQuestion(message, entities, context);
+                                    return {
+                                        prompt: ragResult.answer,
+                                        action: 'general_answer',
+                                        metadata: ragResult.metadata
+                                    };
+                                }
+                                catch (error) {
+                                    console.error('[chatWithOpenAI] RAG failed, falling back to help:', error);
+                                    // Continue to help flow
+                                }
+                            }
                             // Extract what they need help with
                             const helpFor = entities.helpFor || 'general';
                             const helpPrompts = {

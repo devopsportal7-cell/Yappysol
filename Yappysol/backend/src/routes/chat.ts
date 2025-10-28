@@ -228,15 +228,16 @@ router.post('/message', authMiddleware, asyncHandler(async (req, res) => {
 }));
 
 // Token creation endpoint for handling image uploads and step flow
-router.post('/token-creation', upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/token-creation', authMiddleware, upload.single('file'), asyncHandler(async (req, res) => {
   console.log('[CHAT] /token-creation endpoint called');
   console.log('[CHAT] File:', req.file ? 'File received' : 'No file');
   console.log('[CHAT] Body:', req.body);
   
-    const userId = req.body.userId;
+    // Get userId from authenticated user or request body
+    const userId = req.user?.id || req.body.userId;
     if (!userId) {
     return res.status(401).json({ error: 'User ID required' });
-    }
+  }
 
     if (!req.file) {
     return res.status(400).json({ 

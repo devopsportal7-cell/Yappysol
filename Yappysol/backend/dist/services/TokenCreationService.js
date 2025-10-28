@@ -887,15 +887,32 @@ class TokenCreationService {
                     console.log('[DEBUG] Signing Pump transaction with user\'s private key');
                     // Get user's keypair from stored private key
                     const userKeypair = await WalletSupabase_1.WalletModel.getKeypair(walletInfo.id);
-                    // Decode the unsigned transaction
+                    // Decode the unsigned transaction - Pump portal returns VersionedTransaction
                     const transactionBytes = Uint8Array.from(atob(result.unsignedTransaction), c => c.charCodeAt(0));
-                    const transaction = web3_js_1.Transaction.from(transactionBytes);
+                    // Try to deserialize as VersionedTransaction first
+                    let transaction;
+                    try {
+                        transaction = web3_js_1.VersionedTransaction.deserialize(transactionBytes);
+                        console.log('[DEBUG] Transaction deserialized as VersionedTransaction');
+                    }
+                    catch (e) {
+                        // Fallback to legacy transaction if versioned deserialization fails
+                        console.log('[DEBUG] Falling back to legacy Transaction deserialization');
+                        transaction = web3_js_1.Transaction.from(transactionBytes);
+                    }
                     // Sign the transaction
-                    transaction.sign(userKeypair);
-                    // Send to network
+                    let signature;
                     const connection = new web3_js_1.Connection('https://api.mainnet-beta.solana.com');
-                    const signature = await connection.sendRawTransaction(transaction.serialize());
-                    console.log('[DEBUG] Pump transaction signed and submitted:', signature);
+                    if (transaction instanceof web3_js_1.VersionedTransaction) {
+                        transaction.sign([userKeypair]);
+                        signature = await connection.sendRawTransaction(transaction.serialize());
+                        console.log('[DEBUG] Pump transaction signed and submitted (VersionedTransaction):', signature);
+                    }
+                    else {
+                        transaction.sign(userKeypair);
+                        signature = await connection.sendRawTransaction(transaction.serialize());
+                        console.log('[DEBUG] Pump transaction signed and submitted (Legacy Transaction):', signature);
+                    }
                     // Update launch record with success
                     await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
                         mintAddress: mintKeypair.publicKey.toBase58(),
@@ -932,12 +949,17 @@ class TokenCreationService {
                 }
                 catch (signingError) {
                     console.error('[ERROR] Failed to sign Pump transaction:', signingError);
-                    // Update launch record with failure
-                    await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
-                        mintAddress: mintKeypair.publicKey.toBase58(),
-                        status: 'failed',
-                        errorMessage: signingError.message
-                    });
+                    // Update launch record with failure (omit errorMessage if column doesn't exist in DB)
+                    try {
+                        await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
+                            mintAddress: mintKeypair.publicKey.toBase58(),
+                            status: 'failed'
+                        });
+                    }
+                    catch (updateError) {
+                        console.error('[TokenCreationService] Failed to update launch record:', updateError);
+                        // Continue even if update fails - transaction signing error is more important
+                    }
                     return {
                         prompt: `Failed to sign transaction: ${signingError.message}. Please try again.`,
                         step: null
@@ -948,12 +970,16 @@ class TokenCreationService {
             if (result.signature) {
                 const platform = params.pool === 'bonk' ? 'bonk.fun' : 'pump.fun';
                 if (result.error) {
-                    // Update launch record with failure
-                    await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
-                        transactionSignature: result.signature,
-                        status: 'failed',
-                        errorMessage: result.error
-                    });
+                    // Update launch record with failure (omit errorMessage if column doesn't exist in DB)
+                    try {
+                        await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
+                            transactionSignature: result.signature,
+                            status: 'failed'
+                        });
+                    }
+                    catch (updateError) {
+                        console.error('[TokenCreationService] Failed to update launch record:', updateError);
+                    }
                     // Transaction failed
                     let errorMessage = `❌ ${result.error}\n\n[View Transaction on Solscan](https://solscan.io/tx/${result.signature})`;
                     // Add specific guidance based on error type
@@ -1039,8 +1065,7 @@ class TokenCreationService {
             if (launchRecord?.id) {
                 try {
                     await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
-                        status: 'failed',
-                        errorMessage: error.message
+                        status: 'failed'
                     });
                 }
                 catch (updateError) {
