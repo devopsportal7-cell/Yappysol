@@ -152,15 +152,16 @@ async function getExternalTransactions(userId: string, limit: number) {
         .limit(limit);
 
       if (!depositsError && deposits) {
+        console.log('[ACTIVITY] Fetched deposits:', { count: deposits.length });
         allTransactions.push(...deposits);
+      } else {
+        console.error('[ACTIVITY] Error fetching deposits:', depositsError);
       }
     } catch (error) {
       console.error('[ACTIVITY] Error fetching deposits:', error);
     }
 
     // Get withdrawals (outgoing transactions from user's wallets)
-    // Note: We need to check if outgoing transactions are tracked
-    // For now, we'll query transactions where user's wallet is the sender
     try {
       const { data: withdrawals, error: withdrawalsError } = await supabase
         .from('external_transactions')
@@ -170,7 +171,10 @@ async function getExternalTransactions(userId: string, limit: number) {
         .limit(limit);
 
       if (!withdrawalsError && withdrawals) {
+        console.log('[ACTIVITY] Fetched withdrawals:', { count: withdrawals.length });
         allTransactions.push(...withdrawals);
+      } else {
+        console.error('[ACTIVITY] Error fetching withdrawals:', withdrawalsError);
       }
     } catch (error) {
       console.error('[ACTIVITY] Error fetching withdrawals:', error);

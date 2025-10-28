@@ -673,21 +673,21 @@ Be enthusiastic about the Solana ecosystem!`;
           // PRIORITY: Explicit flowType first, then context clues
           if (context.flowType === 'swap' || (context.fromToken || context.toToken)) {
             console.log('[chatWithOpenAI] Routing to: swap service (shared step - swap context)');
-            try {
-              const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
-              return {
-                prompt: swapResult.prompt,
-                step: swapResult.step,
-                action: 'swap',
+          try {
+            const swapResult = await this.tokenSwapService.handleSwapIntent(message, context);
+            return {
+              prompt: swapResult.prompt,
+              step: swapResult.step,
+              action: 'swap',
                 flowType: 'swap',
-                unsignedTransaction: swapResult.unsignedTransaction,
-                requireSignature: swapResult.requireSignature,
-                swapDetails: swapResult.swapDetails
-              };
-            } catch (error) {
-              console.error('[chatWithOpenAI] Error in swap step continuation:', error);
-              return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
-            }
+              unsignedTransaction: swapResult.unsignedTransaction,
+              requireSignature: swapResult.requireSignature,
+              swapDetails: swapResult.swapDetails
+            };
+          } catch (error) {
+            console.error('[chatWithOpenAI] Error in swap step continuation:', error);
+            return { prompt: 'Sorry, I encountered an error processing your swap request. Please try again.', step: null };
+          }
           } else if (context.flowType === 'token-creation' || context.tokenName || context.tokenSymbol) {
             console.log('[chatWithOpenAI] Routing to: token creation service (shared step - creation context)');
             try {

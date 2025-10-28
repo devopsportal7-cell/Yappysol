@@ -116,23 +116,32 @@ export class HeliusBalanceService {
           continue; // Skip tokens with zero balance
         }
         
-        // Step 1: Get price from Moralis (primary source)
+        // Step 1: Check if it's a stablecoin first (USDC/USDT hardcoded to $1.00)
         let priceUsd = 0;
-        try {
-          const priceResponse = await moralis.SolApi.token.getTokenPrice({
-            network: 'mainnet',
-            address: token.mint
-          });
-          priceUsd = priceResponse?.raw?.usdPrice || 0;
-        } catch (error) {
-          // If Moralis fails, try Helius price endpoint
-          priceUsd = await this.getTokenPrice(token.mint);
-        }
-        
-        // Step 2: Fallback to stablecoin price for USDC/USDT if still 0
-        if (priceUsd === 0 && TokenMetadataService.isStablecoin(token.mint)) {
-          priceUsd = TokenMetadataService.getStablecoinPrice(token.mint);
-          logger.info('[HELIUS] Using stablecoin price', { mint: token.mint, priceUsd });
+        if (TokenMetadataService.isStablecoin(token.mint)) {
+          priceUsd = 1.0;
+          logger.info('[HELIUS] Using stablecoin price', { mint: token.mint, priceUsd: 1.0 });
+        } else {
+          // Step 2: Get price from Moralis for SPL tokens
+          try {
+            const priceResponse = await moralis.SolApi.token.getTokenPrice({
+              network: 'mainnet',
+              address: token.mint
+            });
+            priceUsd = priceResponse?.raw?.usdPrice || 0;
+            
+            if (priceUsd > 0) {
+              logger.info('[HELIUS] Price from Moralis', { mint: token.mint, priceUsd });
+            } else {
+              logger.warn('[HELIUS] Moralis returned 0 price', { mint: token.mint });
+            }
+          } catch (error) {
+            logger.error('[HELIUS] Moralis API failed', { 
+              error: error instanceof Error ? error.message : error,
+              mint: token.mint 
+            });
+            priceUsd = 0;
+          }
         }
         
         // Step 3: Enrich with metadata
@@ -303,20 +312,24 @@ export class HeliusBalanceService {
   }
 
   /**
-   * Get SOL price in USD
-   * Tries multiple sources: Binance (primary) -> CoinGecko -> Helius fallback
+   * Get SOL price in USD from Binance API
    */
   private async getSolPrice(): Promise<number> {
-    // Try Binance first (no rate limits, fast, reliable)
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
       const binanceResponse = await fetch(
         'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT',
         {
           headers: {
             'Accept': 'application/json'
-          }
+          },
+          signal: controller.signal
         }
       );
+      
+      clearTimeout(timeoutId);
 
       if (binanceResponse.ok) {
         const data = await binanceResponse.json();
@@ -327,51 +340,22 @@ export class HeliusBalanceService {
           return price;
         } else {
           logger.warn('[HELIUS] Binance returned invalid price', { data });
+          throw new Error('Binance returned invalid price');
         }
       } else {
-        logger.warn('[HELIUS] Binance API error', { 
+        logger.error('[HELIUS] Binance API error', { 
           status: binanceResponse.status, 
           statusText: binanceResponse.statusText 
         });
+        throw new Error(`Binance API error: ${binanceResponse.status}`);
       }
     } catch (error) {
-      logger.warn('[HELIUS] Binance API failed, trying CoinGecko', { error: error instanceof Error ? error.message : error });
+      logger.error('[HELIUS] Failed to fetch SOL price from Binance', { 
+        error: error instanceof Error ? error.message : error 
+      });
+      // Don't use fallback - throw error instead
+      throw new Error('Failed to fetch SOL price from Binance');
     }
-
-    // Fallback to CoinGecko
-    try {
-      const response = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
-        {
-          headers: {
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const price = data.solana?.usd;
-        
-        if (price && price > 0) {
-          logger.info('[HELIUS] SOL price fetched from CoinGecko', { price });
-          return price;
-        } else {
-          logger.warn('[HELIUS] CoinGecko returned invalid price', { data });
-        }
-      } else {
-        logger.warn('[HELIUS] CoinGecko API error', { 
-          status: response.status, 
-          statusText: response.statusText 
-        });
-      }
-    } catch (error) {
-      logger.warn('[HELIUS] CoinGecko API failed', { error: error instanceof Error ? error.message : error });
-    }
-
-    // Final fallback to approximate market price
-    logger.warn('[HELIUS] All price APIs failed, using market price fallback ($194)');
-    return 194; // Fallback to approximate current market price
   }
 
   /**
