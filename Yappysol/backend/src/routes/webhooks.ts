@@ -229,6 +229,9 @@ async function processNativeTransfer(
       direction: isIncoming ? 'incoming' : 'outgoing',
       wallet: walletAddress
     });
+
+    // Trigger balance refresh for this wallet (immediate)
+    requestWalletRefresh(walletAddress, true);
   } catch (error: any) {
     logger.error('[WEBHOOK] Error processing native transfer', { error: error.message });
   }
@@ -308,6 +311,9 @@ async function processTokenTransfer(
       direction: isIncoming ? 'incoming' : 'outgoing',
       wallet: walletAddress
     });
+
+    // Trigger balance refresh for this wallet (immediate)
+    requestWalletRefresh(walletAddress, true);
   } catch (error: any) {
     logger.error('[WEBHOOK] Error processing token transfer', { error: error.message });
   }
