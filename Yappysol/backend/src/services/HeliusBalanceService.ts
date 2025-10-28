@@ -320,7 +320,7 @@ export class HeliusBalanceService {
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
       const binanceResponse = await fetch(
-        'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT',
+        'https://api.binance.us/api/v3/ticker/price?symbol=SOLUSDT',
         {
           headers: {
             'Accept': 'application/json'

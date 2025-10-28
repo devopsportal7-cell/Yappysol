@@ -89,29 +89,31 @@ export class ExternalTransactionService {
         return [];
       }
       
-      // Filter for incoming transactions where wallet is recipient
-      const incomingTxs = transactions.filter(tx => {
+      // Filter for incoming AND outgoing transactions where wallet is involved
+      const relevantTxs = transactions.filter(tx => {
         const isIncoming = this.isIncomingTransaction(tx, walletAddress);
+        const isOutgoing = this.isOutgoingTransaction(tx, walletAddress);
         const isFinalized = tx.confirmationStatus === 'finalized';
         const hasNoError = !tx.err;
         
-        if (!isIncoming) {
-          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - not incoming`);
-        }
-        if (!isFinalized) {
-          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - not finalized: ${tx.confirmationStatus}`);
-        }
-        if (!hasNoError) {
-          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - has error: ${JSON.stringify(tx.err)}`);
+        const isRelevant = (isIncoming || isOutgoing) && isFinalized && hasNoError;
+        
+        if (!isRelevant) {
+          logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out`, {
+            isIncoming,
+            isOutgoing,
+            isFinalized,
+            hasNoError
+          });
         }
         
-        return isIncoming && isFinalized && hasNoError;
+        return isRelevant;
       });
 
-      logger.info(`[EXTERNAL_TX] Found ${incomingTxs.length} incoming transactions`);
+      logger.info(`[EXTERNAL_TX] Found ${relevantTxs.length} relevant transactions (incoming or outgoing)`);
 
       // Filter for external transactions (not from platform wallets)
-      const externalTxs = incomingTxs.filter(tx => {
+      const externalTxs = relevantTxs.filter(tx => {
         const isExternal = this.isExternalTransaction(tx);
         if (!isExternal) {
           logger.debug(`[EXTERNAL_TX] Transaction ${tx.signature} filtered out - internal transaction`);
@@ -325,10 +327,48 @@ export class ExternalTransactionService {
       const postBalance = tx.postBalances[walletIndex] || 0;
       const solIncrease = postBalance > preBalance;
 
+      logger.debug('[EXTERNAL_TX] Balance check', {
+        walletIndex,
+        preBalance,
+        postBalance,
+        solIncrease,
+        hasPostTokenBalance
+      });
+
       return hasPostTokenBalance || solIncrease;
     }
 
     return hasPostTokenBalance || false;
+  }
+
+  /**
+   * Check if transaction is outgoing from the wallet
+   */
+  private isOutgoingTransaction(tx: HeliusTransaction, walletAddress: string): boolean {
+    // Check if wallet is in preTokenBalances but decreased (for SPL tokens)
+    const tokenDecrease = tx.preTokenBalances?.some(preBalance => {
+      if (preBalance.owner === walletAddress && preBalance.uiTokenAmount?.uiAmount) {
+        const postBalance = tx.postTokenBalances?.find(post => 
+          post.owner === walletAddress && post.mint === preBalance.mint
+        );
+        const postAmount = postBalance?.uiTokenAmount?.uiAmount || 0;
+        const preAmount = preBalance.uiTokenAmount.uiAmount;
+        return preAmount > postAmount;
+      }
+      return false;
+    });
+
+    // Check if wallet sent SOL (preBalance > postBalance)
+    const walletIndex = tx.accounts.indexOf(walletAddress);
+    if (walletIndex !== -1) {
+      const preBalance = tx.preBalances[walletIndex] || 0;
+      const postBalance = tx.postBalances[walletIndex] || 0;
+      const solDecrease = preBalance > postBalance;
+
+      return tokenDecrease || solDecrease;
+    }
+
+    return tokenDecrease || false;
   }
 
   /**
