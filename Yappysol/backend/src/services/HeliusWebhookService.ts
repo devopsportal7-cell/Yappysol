@@ -112,17 +112,49 @@ export class HeliusWebhookService {
         addressCount: addresses.length 
       });
 
-      // Get current addresses and merge with new ones
-      const currentAddresses = await this.getWebhookAddresses();
-      const allAddresses = [...new Set([...currentAddresses, ...addresses])];
+      // Use Helius SDK for appending addresses (recommended by Helius docs)
+      // But if SDK not available, use direct API call
+      
+      // Get current webhook details to preserve all settings
+      const webhooks = await this.getAllWebhooks();
+      const currentWebhook = webhooks.find((w: any) => w.webhookID === this.webhookId);
+      
+      if (!currentWebhook) {
+        logger.error('[HELIUS_WEBHOOK] Webhook not found in Helius', { webhookId: this.webhookId });
+        return false;
+      }
+
+      // Get existing addresses - need to query via GET endpoint for full details
+      const { data: webhookDetails } = await httpClient.get(
+        `${this.baseUrl}/v0/webhooks/${this.webhookId}?api-key=${this.apiKey}`
+      );
+
+      const existingAddresses = webhookDetails?.accountAddresses || [];
+      const allAddresses = [...new Set([...existingAddresses, ...addresses])];
+
+      logger.info('[HELIUS_WEBHOOK] Merging addresses', {
+        existing: existingAddresses.length,
+        new: addresses.length,
+        total: allAddresses.length
+      });
+
+      // Update webhook with all addresses
+      // Keep all existing webhook settings
+      const updatePayload = {
+        webhookURL: currentWebhook.webhookURL,
+        transactionTypes: currentWebhook.transactionTypes || ['ANY'],
+        webhookType: currentWebhook.webhookType || 'enhanced',
+        accountAddresses: allAddresses
+      };
+
+      logger.info('[HELIUS_WEBHOOK] Updating webhook', {
+        webhookId: this.webhookId,
+        addressCount: allAddresses.length
+      });
 
       const response = await httpClient.put(
         `${this.baseUrl}/v0/webhooks/${this.webhookId}?api-key=${this.apiKey}`,
-        {
-          webhookURL: this.webhookUrl,
-          transactionTypes: ['Any'],
-          accountAddresses: allAddresses
-        },
+        updatePayload,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -140,7 +172,8 @@ export class HeliusWebhookService {
       logger.error('[HELIUS_WEBHOOK] Error adding wallet addresses', { 
         error: error.message,
         status: error.response?.status,
-        data: error.response?.data
+        data: error.response?.data,
+        url: `${this.baseUrl}/v0/webhooks/${this.webhookId}?api-key=${this.apiKey}`
       });
       return false;
     }

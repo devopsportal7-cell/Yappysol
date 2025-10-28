@@ -1,8 +1,18 @@
 # How Webhook Address Adding Works
 
-## Current Status: **Manual Setup Only**
+## Current Status: **Detection Works, But Adding Addresses Fails**
 
-The webhook exists in Helius dashboard with 2 addresses. The code is designed for automatic management but currently returns `null` (400 errors).
+✅ Webhook detection: **WORKING** (finds existing webhook)
+❌ Adding addresses: **FAILING** (400 error from Helius API)
+
+The logs show:
+```
+info: [HELIUS_WEBHOOK] Using existing webhook { webhookId: "d40a44f4-..." }
+info: [HELIUS_WEBHOOK] Adding wallet addresses to webhook { addressCount: 7 }
+error: [HELIUS_WEBHOOK] Error adding wallet addresses { status: 400 }
+```
+
+This means the code is trying to add addresses but Helius API is rejecting the request format.
 
 ## How It SHOULD Work (Code Design)
 
