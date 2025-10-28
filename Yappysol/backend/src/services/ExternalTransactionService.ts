@@ -266,6 +266,22 @@ export class ExternalTransactionService {
     notificationReceivedTimestamp?: number
   ): Promise<void> {
     try {
+      // Verify user exists before storing transaction
+      const { data: userExists } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (!userExists) {
+        logger.error('[EXTERNAL_TX] Cannot store transaction - user_id does not exist in users table', { 
+          userId,
+          signature: transaction.signature,
+          recipient: transaction.recipient
+        });
+        return;
+      }
+
       const now = new Date().toISOString();
       
       const { error } = await supabase

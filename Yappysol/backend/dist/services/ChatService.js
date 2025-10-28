@@ -141,13 +141,17 @@ class ChatService {
             "who are you",
             "what can this bot do",
             "what can this assistant do",
-            "what can solchatta do",
+            "what can yappysol do",
             "help me",
             "your capabilities",
-            "your features"
+            "your features",
+            "show me what you can do",
+            "what are your commands"
         ];
         const lower = message.toLowerCase();
-        return triggers.some(trigger => lower.includes(trigger));
+        // Only match if the ENTIRE message is asking about capabilities
+        // NOT if they're asking "how to earn" or other questions
+        return triggers.some(trigger => lower === trigger || lower.trim() === trigger);
     }
     isTrendingQuery(message) {
         const trendingKeywords = [
