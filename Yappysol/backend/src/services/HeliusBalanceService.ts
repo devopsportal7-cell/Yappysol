@@ -99,6 +99,23 @@ export class HeliusBalanceService {
       const moralis = getMoralis();
       
       for (const token of tokenBalances) {
+        // Calculate uiAmount if not present
+        let uiAmount = token.uiAmount;
+        if (!uiAmount && token.amount && token.decimals !== undefined) {
+          uiAmount = Number(token.amount) / Math.pow(10, token.decimals);
+          logger.info('[HELIUS] Calculated uiAmount', { 
+            mint: token.mint, 
+            uiAmount,
+            amount: token.amount,
+            decimals: token.decimals 
+          });
+        }
+        
+        if (!uiAmount || uiAmount === 0) {
+          logger.warn('[HELIUS] Skipping token with zero or missing balance', { mint: token.mint });
+          continue; // Skip tokens with zero balance
+        }
+        
         // Step 1: Get price from Moralis (primary source)
         let priceUsd = 0;
         try {
@@ -121,8 +138,9 @@ export class HeliusBalanceService {
         // Step 3: Enrich with metadata
         const enrichedToken = TokenMetadataService.enrichToken(token);
         
-        const usdEquivalent = token.uiAmount * priceUsd;
-        const solEquivalent = usdEquivalent / solPrice; // Use already-fetched solPrice
+        // Calculate values
+        const usdEquivalent = uiAmount * priceUsd;
+        const solEquivalent = usdEquivalent / solPrice;
 
         totalSolValue += solEquivalent;
         totalUsdValue += usdEquivalent;
@@ -130,15 +148,23 @@ export class HeliusBalanceService {
         processedTokens.push({
           mint: token.mint,
           symbol: enrichedToken.symbol || 'UNKNOWN',
-          name: enrichedToken.name || enrichedToken.symbol,
+          name: enrichedToken.name || (enrichedToken.symbol),
           accountUnit: token.mint,
-          uiAmount: token.uiAmount,
+          uiAmount: uiAmount,
           priceUsd,
           solEquivalent,
           usdEquivalent,
           image: enrichedToken.image || token.image,
           solscanUrl: `https://solscan.io/token/${token.mint}`,
           decimals: token.decimals
+        });
+        
+        logger.info('[HELIUS] Token processed', { 
+          symbol: enrichedToken.symbol, 
+          uiAmount,
+          priceUsd,
+          usdEquivalent,
+          solEquivalent
         });
       }
 
