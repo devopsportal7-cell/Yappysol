@@ -12,23 +12,30 @@ const router = Router();
 router.post('/helius', async (req, res) => {
   try {
     logger.info('[WEBHOOK] Helius webhook received', { 
-      type: req.body?.type,
-      accountDataCount: req.body?.accountData?.length || 0
+      bodyKeys: Object.keys(req.body)
     });
 
-    const { accountData, transaction, timestamp } = req.body;
+    // Helius sends an array of transactions
+    const transactions = Array.isArray(req.body) ? req.body : req.body.body || [req.body];
 
-    if (!accountData || !transaction) {
-      logger.warn('[WEBHOOK] Invalid webhook payload', { body: req.body });
+    if (!transactions || transactions.length === 0) {
+      logger.warn('[WEBHOOK] No transactions in payload', { body: req.body });
       return res.status(400).json({ error: 'Invalid payload' });
     }
 
-    // Process each account event
-    const processedCount = await processWebhookEvents(accountData, transaction, timestamp);
+    let totalProcessed = 0;
+
+    // Process each transaction
+    for (const tx of transactions) {
+      const processedCount = await processTransaction(tx);
+      totalProcessed += processedCount;
+    }
+
+    logger.info('[WEBHOOK] Processed transactions', { count: totalProcessed });
 
     res.json({ 
       success: true, 
-      processed: processedCount,
+      processed: totalProcessed,
       message: 'Webhook processed successfully'
     });
   } catch (error: any) {
@@ -38,7 +45,78 @@ router.post('/helius', async (req, res) => {
 });
 
 /**
- * Process webhook events from Helius
+ * Process a single Helius transaction
+ */
+async function processTransaction(tx: any): Promise<number> {
+  let processedCount = 0;
+
+  // Process native SOL transfers
+  if (tx.nativeTransfers && Array.isArray(tx.nativeTransfers)) {
+    for (const transfer of tx.nativeTransfers) {
+      if (transfer.fromUserAccount && transfer.toUserAccount) {
+        // Get user ID by recipient (incoming) or sender (outgoing)
+        const recipient = transfer.toUserAccount;
+        const sender = transfer.fromUserAccount;
+        
+        const userId = await externalTransactionService.getUserIdByWallet(recipient) || 
+                      await externalTransactionService.getUserIdByWallet(sender);
+        
+        if (!userId) {
+          continue;
+        }
+
+        const walletAddress = userId ? recipient : sender;
+
+        await processNativeTransfer(
+          transfer,
+          {
+            signature: tx.signature,
+            blockTime: tx.timestamp,
+            slot: tx.slot
+          },
+          walletAddress
+        );
+        processedCount++;
+      }
+    }
+  }
+
+  // Process SPL token transfers
+  if (tx.tokenTransfers && Array.isArray(tx.tokenTransfers)) {
+    for (const transfer of tx.tokenTransfers) {
+      if (transfer.fromUserAccount && transfer.toUserAccount && transfer.mint) {
+        // Get user ID by recipient (incoming) or sender (outgoing)
+        const recipient = transfer.toUserAccount;
+        const sender = transfer.fromUserAccount;
+        
+        const userId = await externalTransactionService.getUserIdByWallet(recipient) || 
+                      await externalTransactionService.getUserIdByWallet(sender);
+        
+        if (!userId) {
+          continue;
+        }
+
+        const walletAddress = userId ? recipient : sender;
+
+        await processTokenTransfer(
+          transfer,
+          {
+            signature: tx.signature,
+            blockTime: tx.timestamp,
+            slot: tx.slot
+          },
+          walletAddress
+        );
+        processedCount++;
+      }
+    }
+  }
+
+  return processedCount;
+}
+
+/**
+ * Process webhook events from Helius (OLD - kept for reference)
  */
 async function processWebhookEvents(
   accountData: any[], 
