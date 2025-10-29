@@ -343,4 +343,69 @@ export class PasswordController {
       });
     }
   }
+
+  /**
+   * Reset password with email (after Privy verification)
+   * POST /api/user/password/reset-with-email
+   * Used when user forgets app password - Works for both logged-in and logged-out users
+   * Privy verifies email, then we reset the app password
+   */
+  static async resetPasswordWithEmail(req: Request, res: Response) {
+    try {
+      const { email, newPassword, confirmPassword } = req.body;
+      const userId = req.user?.id; // Optional - user might be logged in via Privy
+
+      if (!email || !newPassword || !confirmPassword) {
+        return res.status(400).json({ 
+          error: 'Email, new password, and confirm password are required' 
+        });
+      }
+
+      // Validate new password
+      const validation = PasswordValidator.validate(newPassword, confirmPassword);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          error: 'Password validation failed',
+          details: validation.errors
+        });
+      }
+
+      // Find user - use userId if logged in, otherwise find by email
+      let user;
+      if (userId) {
+        // User is logged in via Privy - use their userId
+        user = await UserModel.findById(userId);
+        
+        // Verify email matches (security check)
+        if (user && user.email !== email) {
+          return res.status(403).json({ 
+            error: 'Email does not match your account' 
+          });
+        }
+      } else {
+        // User is not logged in - find by email
+        user = await UserModel.findByEmail(email);
+      }
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Set the new app password (user is already verified via Privy email)
+      await UserModel.setAppPassword(user.id, newPassword);
+
+      res.json({
+        success: true,
+        message: 'App password reset successfully',
+        strength: PasswordValidator.getPasswordStrength(newPassword)
+      });
+
+    } catch (error) {
+      console.error('[PasswordController] Reset password with email error:', error);
+      res.status(500).json({
+        error: 'Failed to reset password',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
 }

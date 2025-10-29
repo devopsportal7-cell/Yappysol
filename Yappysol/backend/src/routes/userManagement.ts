@@ -15,6 +15,55 @@ router.post('/password/validate', PasswordController.validatePassword);
 router.post('/password/forgot', PasswordController.forgotPassword);
 router.post('/password/reset-request', PasswordController.forgotPassword); // Alias for frontend compatibility
 router.post('/password/reset', PasswordController.resetPassword);
+// Forgot password - works for both logged-in and logged-out users
+// Optional auth - if user is logged in, we use their userId, otherwise find by email
+router.post('/password/reset-with-email', asyncHandler(async (req, res, next) => {
+  // Optional authentication - try to get user info if token exists
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) {
+    // User might be logged in - try to authenticate
+    try {
+      const { AuthService } = await import('../services/AuthService');
+      const { PrivyAuthService } = await import('../services/PrivyAuthService');
+      const { UserModel } = await import('../models/UserSupabase');
+      
+      let payload = AuthService.verifyToken(token);
+      let user;
+      
+      if (payload) {
+        user = await UserModel.findById(payload.userId);
+        if (user) {
+          req.user = {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            onboarding_completed: user.onboarding_completed,
+            created_at: user.created_at,
+            authType: payload.authType || 'jwt'
+          };
+        }
+      } else if (PrivyAuthService.isPrivyConfigured()) {
+        // Try Privy auth
+        const privyResult = await PrivyAuthService.verifyPrivyToken(token);
+        if (privyResult.success && privyResult.user) {
+          req.user = {
+            id: privyResult.user.id,
+            email: privyResult.user.email,
+            username: privyResult.user.username,
+            onboarding_completed: privyResult.user.onboarding_completed,
+            created_at: privyResult.user.created_at,
+            authType: 'privy'
+          };
+        }
+      }
+    } catch {
+      // Auth failed, but that's okay - user will be found by email
+    }
+  }
+  
+  // Call the controller (works with or without req.user)
+  PasswordController.resetPasswordWithEmail(req, res);
+}));
 router.get('/password/reset/verify/:token', PasswordController.verifyResetToken);
 
 // Whitelisted addresses routes
