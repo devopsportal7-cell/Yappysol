@@ -2,52 +2,31 @@
 
 ## Problem
 
-The activity feed is displaying old transactions even though newer transactions have occurred. The network request shows **`304 Not Modified`**, indicating the browser is serving cached data instead of fetching fresh activity data from the backend.
+The activity feed is displaying old transactions even though newer transactions have occurred. Two issues are causing this:
+
+1. **Snapshot error** - Network request shows `net::ERR_FAILED` with CORS error: "Request header field cache-control is not allowed by Access-Control-Allow-Headers"
+2. **Browser caching** - Even after fixing CORS, browser may cache responses showing `304 Not Modified`
 
 ## Root Cause
 
-1. **Browser caching** - The `/api/activity` endpoint response is being cached by the browser
-2. **No cache-control headers** - The backend isn't sending proper headers to prevent caching
-3. **Frontend not bypassing cache** - The frontend fetch request doesn't disable caching
+1. **CORS blocking cache-control header** - Frontend sends `Cache-Control` header, but backend CORS didn't allow it
+2. **Browser caching** - The `/api/activity` endpoint response is being cached by the browser
+3. **No cache-control headers in response** - Backend response wasn't telling browser not to cache
+
+## Backend Fixes Applied ✅
+
+1. ✅ **CORS updated** - Added `Cache-Control` and `Pragma` to allowed headers in `app.ts`
+2. ✅ **Response headers added** - Activity endpoint now sends cache-control headers in `activity.ts`
+
+## Frontend Fix Needed
 
 ## Solution
 
-### Step 1: Update Backend to Send Cache-Control Headers
-
-**File:** `Yappysol/backend/src/routes/activity.ts`
-
-Find the response in the activity route handler (around line 84) and add cache headers:
-
-```typescript
-router.get('/', authMiddleware, asyncHandler(async (req, res) => {
-  // ... existing code ...
-  
-  // ADD THIS: Set cache headers to prevent browser caching
-  res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store'
-  });
-
-  res.json({
-    activities: paginatedActivities,
-    total: activities.length,
-    limit,
-    offset
-  });
-}));
-```
-
-**Complete endpoint URL:** 
-- Production: `GET https://yappysol.onrender.com/api/activity?limit={limit}&offset={offset}`
-- Local: `GET http://localhost:3000/api/activity?limit={limit}&offset={offset}` (or your local port)
-
-### Step 2: Update Frontend to Disable Caching in Fetch Request
+### Step 1: Update Frontend to Disable Caching in Fetch Request
 
 **File:** `frontend/src/pages/Chat.tsx` (or wherever activities are fetched)
 
-Find where the activity API is called and update the fetch request:
+Find where the activity API is called and update the fetch request. **IMPORTANT: Use the complete URL, not relative paths:**
 
 ```typescript
 // FIND THIS (or similar):
@@ -57,76 +36,62 @@ const response = await fetch(`/api/activity?limit=${limit}&offset=${offset}`, {
   }
 });
 
-// REPLACE WITH THIS:
-const response = await fetch(`/api/activity?limit=${limit}&offset=${offset}`, {
+// REPLACE WITH THIS (using complete URL):
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://yappysol.onrender.com';
+const response = await fetch(`${API_BASE_URL}/api/activity?limit=${limit}&offset=${offset}`, {
   method: 'GET',
   headers: {
-    'Authorization': `Bearer ${token}`,
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache'
+    'Authorization': `Bearer ${token}`
+    // Don't add Cache-Control header in request - cache: 'no-store' is enough
   },
-  cache: 'no-store', // Force fresh fetch every time
+  cache: 'no-store', // Force fresh fetch every time - THIS IS KEY
   credentials: 'include'
 });
 ```
 
-**Complete endpoint URL:** `GET https://yappysol.onrender.com/api/activity?limit={limit}&offset={offset}`
+**Complete Endpoint URLs:**
+- **Production:** `GET https://yappysol.onrender.com/api/activity?limit={limit}&offset={offset}`
+- **Local Dev:** `GET http://localhost:3001/api/activity?limit={limit}&offset={offset}` (adjust port if different)
 
-### Step 3: Alternative - Add Timestamp Cache-Busting (If Above Doesn't Work)
+**Note:** If using environment variables, set `REACT_APP_API_URL=https://yappysol.onrender.com` in your `.env` file.
 
-If the browser still caches, add a timestamp parameter:
+### Step 2: Alternative - Add Timestamp Cache-Busting (If Above Doesn't Work)
+
+If the browser still caches after using `cache: 'no-store'`, add a timestamp parameter:
 
 ```typescript
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://yappysol.onrender.com';
 const timestamp = Date.now();
-const response = await fetch(`/api/activity?limit=${limit}&offset=${offset}&_t=${timestamp}`, {
+const response = await fetch(`${API_BASE_URL}/api/activity?limit=${limit}&offset=${offset}&_t=${timestamp}`, {
   method: 'GET',
   headers: {
-    'Authorization': `Bearer ${token}`,
-    'Cache-Control': 'no-cache'
+    'Authorization': `Bearer ${token}`
   },
   cache: 'no-store'
 });
 ```
 
-## Complete Implementation Example
-
-### Backend Change (activity.ts)
-
-```typescript
-// Around line 84, BEFORE res.json()
-res.set({
-  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0'
-});
-
-res.json({
-  activities: paginatedActivities,
-  total: activities.length,
-  limit,
-  offset
-});
-```
-
-### Frontend Change (Where Activities Are Fetched)
+## Complete Frontend Implementation Example
 
 ```typescript
 const fetchActivities = async (limit = 50, offset = 0) => {
   const token = localStorage.getItem('token');
   
-  const response = await fetch(`https://yappysol.onrender.com/api/activity?limit=${limit}&offset=${offset}`, {
+  // Use complete URL - no relative paths
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://yappysol.onrender.com';
+  
+  const response = await fetch(`${API_BASE_URL}/api/activity?limit=${limit}&offset=${offset}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache'
+      'Authorization': `Bearer ${token}`
+      // Don't add Cache-Control in headers - use cache: 'no-store' instead
     },
-    cache: 'no-store',
+    cache: 'no-store', // THIS is the key - forces fresh fetch
     credentials: 'include'
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch activities');
+    throw new Error(`Failed to fetch activities: ${response.status}`);
   }
 
   const data = await response.json();
@@ -141,31 +106,55 @@ const fetchActivities = async (limit = 50, offset = 0) => {
 | Get Activities | GET | `https://yappysol.onrender.com/api/activity?limit={limit}&offset={offset}` |
 | Headers Required | - | `Authorization: Bearer {token}` |
 
+**Example Request:**
+```
+GET https://yappysol.onrender.com/api/activity?limit=50&offset=0
+Headers:
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
 ## Testing After Fix
 
 1. ✅ Clear browser cache (Ctrl+Shift+Delete → Clear cached images and files)
 2. ✅ Hard refresh page (Ctrl+Shift+R or Cmd+Shift+R)
 3. ✅ Open DevTools → Network tab
-4. ✅ Verify activity request shows **`200 OK`** instead of `304 Not Modified`
-5. ✅ Verify newest transactions appear first in the activity feed
-6. ✅ Make a new transaction and verify it appears immediately
+4. ✅ Verify activity request shows **`200 OK`** instead of `304 Not Modified` or `ERR_FAILED`
+5. ✅ Verify CORS error is gone (no red error in console)
+6. ✅ Verify newest transactions appear first in the activity feed
+7. ✅ Make a new transaction and verify it appears immediately
 
 ## Expected Behavior After Fix
 
 - ✅ Every request fetches fresh data from the server
-- ✅ Network tab shows `200 OK` status (not `304 Not Modified`)
+- ✅ Network tab shows `200 OK` status (not `304 Not Modified` or `ERR_FAILED`)
+- ✅ No CORS errors in console
 - ✅ New transactions appear immediately
 - ✅ Activities are sorted by timestamp descending (newest first)
 
 ## Quick Verification
 
 After implementing, check the Network tab:
-- **Before Fix:** `304 Not Modified` (cached)
-- **After Fix:** `200 OK` (fresh data)
+- **Before Fix:** `ERR_FAILED` or `304 Not Modified` (cached/CORS error)
+- **After Fix:** `200 OK` (fresh data, no errors)
 
 ## Summary
 
-**Backend:** Add cache-control headers to activity endpoint response  
-**Frontend:** Use `cache: 'no-store'` in fetch options  
-**Result:** Activity feed always shows the latest transactions
+**Backend:** ✅ Already fixed - CORS allows Cache-Control, response sends cache headers  
+**Frontend:** **NEEDS FIX** - Add `cache: 'no-store'` to fetch options + use complete URL  
+**Result:** Activity feed will always show the latest transactions
 
+## Key Points
+
+1. ✅ **Use complete URL** - Don't use relative paths like `/api/activity`, use `https://yappysol.onrender.com/api/activity`
+2. ✅ **Add `cache: 'no-store'`** - This is the most important fix
+3. ✅ **CORS is fixed** - No need to add Cache-Control headers in request (they were causing CORS errors)
+4. ✅ **Backend sends cache headers** - Response tells browser not to cache
+
+## Troubleshooting
+
+If you still see errors after implementing:
+
+1. **CORS error persists?** Check that `REACT_APP_API_URL` is set correctly or fallback URL is correct
+2. **304 Not Modified?** Make sure `cache: 'no-store'` is in the fetch options
+3. **Still showing old data?** Clear browser cache and hard refresh (Ctrl+Shift+R)
+4. **Network errors?** Verify the backend is running and accessible at `https://yappysol.onrender.com`
