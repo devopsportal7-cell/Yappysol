@@ -13,6 +13,7 @@ router.post('/password/verify', authMiddleware, PasswordController.verifyPasswor
 router.get('/password/status', authMiddleware, PasswordController.getPasswordStatus);
 router.post('/password/validate', PasswordController.validatePassword);
 router.post('/password/forgot', PasswordController.forgotPassword);
+router.post('/password/reset-request', PasswordController.forgotPassword); // Alias for frontend compatibility
 router.post('/password/reset', PasswordController.resetPassword);
 router.get('/password/reset/verify/:token', PasswordController.verifyResetToken);
 
