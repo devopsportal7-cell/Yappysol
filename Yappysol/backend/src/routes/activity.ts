@@ -64,7 +64,7 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
     console.log('[ACTIVITY] User wallet addresses for direction detection:', { count: userWalletAddresses.length });
 
     // Fetch all activity types in parallel with timeout protection
-    const timeout = 10000; // 10 second timeout per operation
+    const timeout = 5000; // 5 second timeout per operation to prevent page hanging
     
     const [launches, swaps, externalTxs] = await Promise.all([
       Promise.race([
@@ -213,7 +213,7 @@ async function getExternalTransactions(userId: string, limit: number) {
           setTimeout(() => {
             console.warn('[ACTIVITY] Deposits query timeout');
             resolve({ data: null, error: { message: 'Query timeout' } });
-          }, 5000)
+          }, 3000) // Reduced to 3 seconds
         )
       ]) as any;
 
@@ -255,7 +255,7 @@ async function getExternalTransactions(userId: string, limit: number) {
           setTimeout(() => {
             console.warn('[ACTIVITY] Withdrawals query timeout');
             resolve({ data: null, error: { message: 'Query timeout' } });
-          }, 5000)
+          }, 3000) // Reduced to 3 seconds
         )
       ]) as any;
 

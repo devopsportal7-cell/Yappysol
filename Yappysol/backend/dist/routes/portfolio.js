@@ -43,40 +43,114 @@ const logger_1 = require("../utils/logger");
 const router = express_1.default.Router();
 const portfolioService = new UserPortfolioService_1.UserPortfolioService();
 router.get('/:walletAddress', async (req, res) => {
+    const PORTFOLIO_TIMEOUT = 8000; // 8 second timeout to prevent hanging
+    const { walletAddress } = req.params;
     try {
-        const { walletAddress } = req.params;
         logger_1.logger.info('[Portfolio Route] Fetching portfolio for:', { walletAddress });
-        // Try to get from cache first
-        const cachedPortfolio = await BalanceCacheService_1.balanceCacheService.getFromCache(walletAddress);
+        // Set response timeout to prevent hanging
+        req.setTimeout(PORTFOLIO_TIMEOUT, () => {
+            logger_1.logger.warn('[Portfolio Route] Request timeout', { walletAddress });
+        });
+        // Try to get from cache first (with timeout)
+        const cachedPortfolio = await Promise.race([
+            BalanceCacheService_1.balanceCacheService.getFromCache(walletAddress),
+            new Promise((resolve) => setTimeout(() => {
+                logger_1.logger.warn('[Portfolio Route] Cache lookup timeout');
+                resolve(null);
+            }, 2000))
+        ]);
         if (cachedPortfolio) {
             logger_1.logger.info('[Portfolio Route] Returning cached portfolio', {
                 walletAddress,
-                tokenCount: cachedPortfolio.tokens.length,
+                tokenCount: cachedPortfolio.tokens?.length || 0,
                 totalUsdValue: cachedPortfolio.totalUsdValue
             });
-            // Send cached portfolio to frontend WebSocket clients
-            const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
-            frontendWebSocketServer.emitWalletUpdate(walletAddress, cachedPortfolio);
+            // Send cached portfolio to frontend WebSocket clients (non-blocking)
+            Promise.resolve().then(async () => {
+                try {
+                    const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
+                    frontendWebSocketServer.emitWalletUpdate(walletAddress, cachedPortfolio);
+                }
+                catch (e) {
+                    logger_1.logger.error('[Portfolio Route] Error emitting WebSocket update:', e);
+                }
+            });
+            // Set cache headers to prevent browser caching
+            res.set({
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
             return res.json(cachedPortfolio);
         }
-        // If no cache, fetch fresh data using HeliusBalanceService (with USD conversion fix)
+        // If no cache, try to fetch fresh data with timeout
+        // But don't block - return empty portfolio if it takes too long
         logger_1.logger.warn('[Portfolio Route] No cached data found, fetching fresh from Helius', { walletAddress });
-        const { heliusBalanceService } = await Promise.resolve().then(() => __importStar(require('../services/HeliusBalanceService')));
-        const portfolio = await heliusBalanceService.getWalletPortfolio(walletAddress);
-        // Cache the fresh data for future requests
-        await BalanceCacheService_1.balanceCacheService.updateCache(walletAddress, portfolio);
-        // Send fresh portfolio to frontend WebSocket clients
-        const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
-        frontendWebSocketServer.emitWalletUpdate(walletAddress, portfolio);
-        logger_1.logger.info('[Portfolio Route] Fresh portfolio fetched and cached', {
-            walletAddress,
-            tokenCount: portfolio.tokens.length
-        });
-        res.json(portfolio);
+        try {
+            const { heliusBalanceService } = await Promise.resolve().then(() => __importStar(require('../services/HeliusBalanceService')));
+            const portfolioPromise = heliusBalanceService.getWalletPortfolio(walletAddress);
+            const portfolio = await Promise.race([
+                portfolioPromise,
+                new Promise((resolve) => setTimeout(() => {
+                    logger_1.logger.warn('[Portfolio Route] Fresh fetch timeout, returning empty portfolio');
+                    resolve({
+                        totalSolValue: 0,
+                        totalUsdValue: 0,
+                        tokens: []
+                    });
+                }, PORTFOLIO_TIMEOUT - 1000)) // Leave 1 second buffer
+            ]);
+            // Cache the fresh data for future requests (non-blocking)
+            Promise.resolve().then(async () => {
+                try {
+                    await BalanceCacheService_1.balanceCacheService.updateCache(walletAddress, portfolio);
+                    const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
+                    frontendWebSocketServer.emitWalletUpdate(walletAddress, portfolio);
+                }
+                catch (e) {
+                    logger_1.logger.error('[Portfolio Route] Error caching/emitting update:', e);
+                }
+            });
+            logger_1.logger.info('[Portfolio Route] Fresh portfolio fetched', {
+                walletAddress,
+                tokenCount: portfolio?.tokens?.length || 0
+            });
+            // Set cache headers
+            res.set({
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
+            res.json(portfolio);
+        }
+        catch (fetchError) {
+            logger_1.logger.error('[Portfolio Route] Error fetching fresh portfolio:', fetchError);
+            // Return empty portfolio instead of error to prevent frontend from hanging
+            res.set({
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
+            res.json({
+                totalSolValue: 0,
+                totalUsdValue: 0,
+                tokens: []
+            });
+        }
     }
     catch (e) {
-        logger_1.logger.error('[Portfolio Route] Error:', { error: e, walletAddress: req.params.walletAddress });
-        res.status(500).json({ error: 'Failed to fetch portfolio' });
+        logger_1.logger.error('[Portfolio Route] Error:', { error: e?.message || e, walletAddress });
+        // Always return a response to prevent hanging
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
+        res.status(200).json({
+            totalSolValue: 0,
+            totalUsdValue: 0,
+            tokens: []
+        });
     }
 });
 exports.default = router;

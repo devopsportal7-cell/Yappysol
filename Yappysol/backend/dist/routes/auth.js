@@ -128,24 +128,51 @@ router.get('/wallets', authMiddleware_1.authMiddleware, (0, asyncHandler_1.async
     }
     const wallets = await AuthService_1.AuthService.getUserWallets(userId);
     console.log('[AUTH] getUserWallets result:', JSON.stringify(wallets, null, 2));
-    // Get portfolio data from cache and include in response
+    // Get portfolio data from cache and include in response (with timeout protection)
     const { balanceCacheService } = await Promise.resolve().then(() => __importStar(require('../services/BalanceCacheService')));
+    const WALLET_TIMEOUT = 3000; // 3 second timeout per wallet to prevent blocking
     const walletsWithPortfolio = await Promise.all(wallets.map(async (wallet) => {
-        const portfolio = await balanceCacheService.getFromCache(wallet.publicKey);
-        // Emit WebSocket update if portfolio exists
-        if (portfolio) {
-            const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
-            frontendWebSocketServer.emitWalletUpdate(wallet.publicKey, portfolio);
-            return {
-                id: wallet.id,
-                publicKey: wallet.publicKey,
-                isImported: wallet.isImported,
-                balance: wallet.balance, // SOL balance
-                portfolio: portfolio // Include full portfolio with USD equivalent
-            };
+        try {
+            // Race cache lookup against timeout - don't block if cache is slow
+            const portfolio = await Promise.race([
+                balanceCacheService.getFromCache(wallet.publicKey),
+                new Promise((resolve) => setTimeout(() => {
+                    console.warn('[AUTH] Portfolio cache lookup timeout for wallet:', wallet.publicKey);
+                    resolve(null);
+                }, WALLET_TIMEOUT))
+            ]);
+            // Emit WebSocket update if portfolio exists (non-blocking)
+            if (portfolio) {
+                Promise.resolve().then(async () => {
+                    try {
+                        const { frontendWebSocketServer } = await Promise.resolve().then(() => __importStar(require('../services/FrontendWebSocketServer')));
+                        frontendWebSocketServer.emitWalletUpdate(wallet.publicKey, portfolio);
+                    }
+                    catch (e) {
+                        console.error('[AUTH] Error emitting WebSocket update:', e);
+                    }
+                });
+                return {
+                    id: wallet.id,
+                    publicKey: wallet.publicKey,
+                    isImported: wallet.isImported,
+                    balance: wallet.balance, // SOL balance
+                    portfolio: portfolio // Include full portfolio with USD equivalent
+                };
+            }
+            else {
+                // No portfolio cached yet, return basic wallet info
+                return {
+                    id: wallet.id,
+                    publicKey: wallet.publicKey,
+                    isImported: wallet.isImported,
+                    balance: wallet.balance
+                };
+            }
         }
-        else {
-            // No portfolio cached yet, return basic wallet info
+        catch (error) {
+            console.error('[AUTH] Error fetching portfolio for wallet:', wallet.publicKey, error);
+            // Return basic wallet info even if portfolio fetch fails
             return {
                 id: wallet.id,
                 publicKey: wallet.publicKey,
@@ -154,6 +181,12 @@ router.get('/wallets', authMiddleware_1.authMiddleware, (0, asyncHandler_1.async
             };
         }
     }));
+    // Set cache headers to prevent browser caching
+    res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+    });
     res.json({ wallets: walletsWithPortfolio });
 }));
 // Get user API keys
