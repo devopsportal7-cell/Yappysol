@@ -53,6 +53,16 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
 
     console.log('[ACTIVITY] Fetching activities', { userId, limit, offset });
 
+    // Get user's wallet addresses for determining transaction direction
+    const { data: wallets, error: walletsError } = await supabase
+      .from('wallets')
+      .select('public_key')
+      .eq('user_id', userId)
+      .eq('is_active', true);
+    
+    const userWalletAddresses = wallets && !walletsError ? wallets.map((w: any) => w.public_key) : [];
+    console.log('[ACTIVITY] User wallet addresses for direction detection:', { count: userWalletAddresses.length });
+
     // Fetch all activity types in parallel with timeout protection
     const timeout = 10000; // 10 second timeout per operation
     
@@ -81,15 +91,35 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
     const activities: ActivityItem[] = [
       ...launches.map(formatLaunchActivity),
       ...swaps.map(formatSwapActivity),
-      ...externalTxs.map(formatExternalActivity)
-    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      ...externalTxs.map(tx => formatExternalActivity(tx, userWalletAddresses))
+    ].filter(activity => {
+      // Validate timestamp exists and is valid
+      if (!activity.timestamp) {
+        console.warn('[ACTIVITY] Activity missing timestamp:', activity.id);
+        return false;
+      }
+      const ts = new Date(activity.timestamp).getTime();
+      if (isNaN(ts)) {
+        console.warn('[ACTIVITY] Invalid timestamp:', activity.id, activity.timestamp);
+        return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      // Sort by timestamp descending (newest first)
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeB - timeA;
+    });
 
     // Apply limit and offset
     const paginatedActivities = activities.slice(offset, offset + limit);
 
     console.log('[ACTIVITY] Returning activities', { 
       total: activities.length, 
-      returned: paginatedActivities.length 
+      returned: paginatedActivities.length,
+      oldestTimestamp: activities.length > 0 ? activities[activities.length - 1]?.timestamp : 'N/A',
+      newestTimestamp: activities.length > 0 ? activities[0]?.timestamp : 'N/A',
+      firstThreeIds: paginatedActivities.slice(0, 3).map(a => ({ id: a.id, type: a.type, timestamp: a.timestamp }))
     });
 
     // Set cache headers to prevent browser caching of activity data
@@ -261,12 +291,21 @@ async function getExternalTransactions(userId: string, limit: number) {
  * Format token launch as activity item
  */
 function formatLaunchActivity(launch: any): ActivityItem {
+  // Use the most recent timestamp - prefer completed_at if available, otherwise created_at
+  let timestamp = launch.completed_at || launch.created_at;
+  if (launch.created_at && launch.completed_at) {
+    // Use whichever is more recent
+    const created = new Date(launch.created_at).getTime();
+    const completed = new Date(launch.completed_at).getTime();
+    timestamp = completed > created ? launch.completed_at : launch.created_at;
+  }
+  
   return {
     id: launch.id,
     type: 'launch',
     title: `Created ${launch.token_name} (${launch.token_symbol})`,
     description: `Launched token on ${launch.pool_type === 'pump' ? 'Pump.fun' : 'Bonk'}`,
-    timestamp: launch.created_at || launch.completed_at,
+    timestamp,
     status: launch.status === 'completed' ? 'confirmed' : 
             launch.status === 'failed' ? 'failed' : 'pending',
     metadata: {
@@ -312,17 +351,28 @@ function formatSwapActivity(swap: any): ActivityItem {
 /**
  * Format external transaction as activity item
  */
-function formatExternalActivity(tx: any): ActivityItem {
-  // Determine if this is a deposit or withdrawal
-  // If we have the walletAddress in context, compare
-  // For now, check if there's a field indicating direction
-  const hasRecipient = tx.recipient;
-  const hasSender = tx.sender;
+function formatExternalActivity(tx: any, userWalletAddresses: string[]): ActivityItem {
+  // Determine if this is incoming (deposit) or outgoing (withdrawal)
+  // Check if sender is in user's wallets (outgoing) or recipient is in user's wallets (incoming)
+  const senderInUserWallets = tx.sender && userWalletAddresses.includes(tx.sender);
+  const recipientInUserWallets = tx.recipient && userWalletAddresses.includes(tx.recipient);
   
-  // If we have both, we need to determine which wallet this is for
-  // For simplification, assume if recipient exists and has data, it's a deposit
-  const isIncoming = hasRecipient && !tx.is_withdrawal;
-  const direction = isIncoming ? 'Received' : 'Sent';
+  // If sender is user's wallet -> outgoing (Sent)
+  // If recipient is user's wallet -> incoming (Received)
+  const isIncoming = recipientInUserWallets && !senderInUserWallets;
+  const isOutgoing = senderInUserWallets && !recipientInUserWallets;
+  
+  // Fallback: if both or neither match, use is_withdrawal flag if available
+  let direction: string;
+  if (isIncoming) {
+    direction = 'Received';
+  } else if (isOutgoing) {
+    direction = 'Sent';
+  } else {
+    // Fallback logic
+    direction = tx.is_withdrawal ? 'Sent' : 'Received';
+  }
+  
   const symbol = tx.token_symbol || tx.tokenSymbol || 'SOL';
   const amount = tx.amount || 0;
 
