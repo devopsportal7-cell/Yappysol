@@ -53,11 +53,22 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
 
     console.log('[ACTIVITY] Fetching activities', { userId, limit, offset });
 
-    // Fetch all activity types in parallel
+    // Fetch all activity types in parallel with timeout protection
+    const timeout = 10000; // 10 second timeout per operation
+    
     const [launches, swaps, externalTxs] = await Promise.all([
-      getLaunches(userId, limit),
-      getSwaps(userId, limit),
-      getExternalTransactions(userId, limit)
+      Promise.race([
+        getLaunches(userId, limit),
+        new Promise(resolve => setTimeout(() => { console.warn('[ACTIVITY] Launches timeout'); resolve([]); }, timeout))
+      ]) as Promise<any[]>,
+      Promise.race([
+        getSwaps(userId, limit),
+        new Promise(resolve => setTimeout(() => { console.warn('[ACTIVITY] Swaps timeout'); resolve([]); }, timeout))
+      ]) as Promise<any[]>,
+      Promise.race([
+        getExternalTransactions(userId, limit),
+        new Promise(resolve => setTimeout(() => { console.warn('[ACTIVITY] External transactions timeout'); resolve([]); }, timeout))
+      ]) as Promise<any[]>
     ]);
 
     console.log('[ACTIVITY] Fetched data', { 
@@ -144,20 +155,37 @@ async function getExternalTransactions(userId: string, limit: number) {
       .eq('is_active', true);
 
     if (error || !wallets || wallets.length === 0) {
+      console.log('[ACTIVITY] No wallets found for user:', userId);
       return [];
     }
 
     const walletAddresses = wallets.map((w: any) => w.public_key);
+    if (walletAddresses.length === 0) {
+      console.log('[ACTIVITY] No wallet addresses to query');
+      return [];
+    }
+
     const allTransactions: any[] = [];
 
     // Get deposits (incoming transactions to user's wallets)
     try {
-      const { data: deposits, error: depositsError } = await supabase
+      // Use a query with timeout protection
+      const depositsQuery = supabase
         .from('external_transactions')
         .select('*')
         .in('recipient', walletAddresses)
         .order('block_time', { ascending: false })
         .limit(limit);
+      
+      const { data: deposits, error: depositsError } = await Promise.race([
+        depositsQuery,
+        new Promise((resolve) => 
+          setTimeout(() => {
+            console.warn('[ACTIVITY] Deposits query timeout');
+            resolve({ data: null, error: { message: 'Query timeout' } });
+          }, 5000)
+        )
+      ]) as any;
 
       if (!depositsError && deposits) {
         console.log('[ACTIVITY] Fetched deposits:', { count: deposits.length });
@@ -186,12 +214,20 @@ async function getExternalTransactions(userId: string, limit: number) {
 
     // Get withdrawals (outgoing transactions from user's wallets)
     try {
-      const { data: withdrawals, error: withdrawalsError } = await supabase
-        .from('external_transactions')
-        .select('*')
-        .in('sender', walletAddresses)
-        .order('block_time', { ascending: false })
-        .limit(limit);
+      const { data: withdrawals, error: withdrawalsError } = await Promise.race([
+        supabase
+          .from('external_transactions')
+          .select('*')
+          .in('sender', walletAddresses)
+          .order('block_time', { ascending: false })
+          .limit(limit),
+        new Promise((resolve) => 
+          setTimeout(() => {
+            console.warn('[ACTIVITY] Withdrawals query timeout');
+            resolve({ data: null, error: { message: 'Query timeout' } });
+          }, 5000)
+        )
+      ]) as any;
 
       if (!withdrawalsError && withdrawals) {
         console.log('[ACTIVITY] Fetched withdrawals:', { count: withdrawals.length });
@@ -290,14 +326,40 @@ function formatExternalActivity(tx: any): ActivityItem {
   const symbol = tx.token_symbol || tx.tokenSymbol || 'SOL';
   const amount = tx.amount || 0;
 
+  // Handle timestamp - block_time could be seconds (number) or ISO string
+  let timestamp: string;
+  if (tx.block_time) {
+    if (typeof tx.block_time === 'number') {
+      // If it's a number, treat as Unix timestamp in seconds
+      timestamp = new Date(tx.block_time * 1000).toISOString();
+    } else if (typeof tx.block_time === 'string') {
+      // If it's already a string, check if it's ISO format or needs conversion
+      if (tx.block_time.includes('T') || tx.block_time.includes('Z')) {
+        timestamp = tx.block_time; // Already ISO format
+      } else {
+        // Try to parse as number string
+        const parsed = parseFloat(tx.block_time);
+        timestamp = isNaN(parsed) ? new Date().toISOString() : new Date(parsed * 1000).toISOString();
+      }
+    } else {
+      timestamp = new Date().toISOString();
+    }
+  } else if (tx.blockTime) {
+    timestamp = typeof tx.blockTime === 'number' 
+      ? new Date(tx.blockTime * 1000).toISOString()
+      : (typeof tx.blockTime === 'string' ? tx.blockTime : new Date().toISOString());
+  } else if (tx.created_at) {
+    timestamp = tx.created_at;
+  } else {
+    timestamp = new Date().toISOString();
+  }
+
   return {
     id: tx.signature || tx.id || Math.random().toString(),
     type: 'external',
     title: `${direction} ${amount} ${symbol}`,
     description: isIncoming ? 'External deposit' : 'Sent to external address',
-    timestamp: tx.block_time ? new Date(tx.block_time * 1000).toISOString() : 
-               tx.blockTime ? new Date(tx.blockTime * 1000).toISOString() : 
-               new Date().toISOString(),
+    timestamp,
     status: tx.status || 'confirmed',
     metadata: {
       signature: tx.signature,
