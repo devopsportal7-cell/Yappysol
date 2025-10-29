@@ -153,7 +153,22 @@ async function getExternalTransactions(userId: string, limit: number) {
 
       if (!depositsError && deposits) {
         console.log('[ACTIVITY] Fetched deposits:', { count: deposits.length });
-        allTransactions.push(...deposits);
+        // Filter out dust transactions (< 0.00001 SOL or < 1e-8 for SPL tokens)
+        const MIN_SIGNIFICANT_AMOUNT = 0.00001;
+        const filteredDeposits = deposits.filter((tx: any) => {
+          if (tx.type === 'SOL' && parseFloat(tx.amount) >= MIN_SIGNIFICANT_AMOUNT) {
+            return true;
+          }
+          if (tx.type === 'SPL' && parseFloat(tx.amount) >= 1e-8) {
+            return true;
+          }
+          return false;
+        });
+        console.log('[ACTIVITY] After filtering dust:', { 
+          original: deposits.length, 
+          filtered: filteredDeposits.length 
+        });
+        allTransactions.push(...filteredDeposits);
       } else {
         console.error('[ACTIVITY] Error fetching deposits:', depositsError);
       }
@@ -172,7 +187,18 @@ async function getExternalTransactions(userId: string, limit: number) {
 
       if (!withdrawalsError && withdrawals) {
         console.log('[ACTIVITY] Fetched withdrawals:', { count: withdrawals.length });
-        allTransactions.push(...withdrawals);
+        // Filter out dust transactions (< 0.00001 SOL or < 1e-8 for SPL tokens)
+        const MIN_SIGNIFICANT_AMOUNT = 0.00001;
+        const filteredWithdrawals = withdrawals.filter((tx: any) => {
+          if (tx.type === 'SOL' && parseFloat(tx.amount) >= MIN_SIGNIFICANT_AMOUNT) {
+            return true;
+          }
+          if (tx.type === 'SPL' && parseFloat(tx.amount) >= 1e-8) {
+            return true;
+          }
+          return false;
+        });
+        allTransactions.push(...filteredWithdrawals);
       } else {
         console.error('[ACTIVITY] Error fetching withdrawals:', withdrawalsError);
       }

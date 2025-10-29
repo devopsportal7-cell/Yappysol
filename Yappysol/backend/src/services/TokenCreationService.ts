@@ -257,7 +257,15 @@ async function createTokenMetadata(
     } catch (e) {
       throw new Error(`Pump API did not return valid JSON: ${text}`);
     }
-    return data.metadataUri;
+    
+    // Extract and store both metadataUri and imageUrl
+    const metadataUri = data.metadataUri;
+    const imageUrl = data.metadata?.image || null;
+    
+    // Store in a global cache so createToken can access it
+    (global as any).lastTokenMetadata = { metadataUri, imageUrl };
+    
+    return metadataUri;
   } else if (pool === 'bonk') {
     // For Bonk, we need to upload image to IPFS first, then create metadata
     const imageUri = await pinataUploadImageToIPFS(imageFile);
@@ -861,6 +869,15 @@ export class TokenCreationService {
       throw new Error('No wallet found for user. Please create or import a wallet first.');
     }
 
+    // Get image URL from the metadata response (stored in global cache)
+    const metadataInfo = (global as any).lastTokenMetadata || { imageUrl: null };
+    const finalImageUrl = params.imageUrl || metadataInfo.imageUrl;
+    
+    console.log('[DEBUG] Final imageUrl for token launch:', finalImageUrl);
+    
+    // Clear the global cache after use to prevent stale data
+    delete (global as any).lastTokenMetadata;
+    
     // Create database record for the launch AFTER wallet validation
     const launchRecord = await TokenLaunchModel.createLaunch({
       userId: params.userId,
@@ -868,7 +885,7 @@ export class TokenCreationService {
       tokenName: params.name,
       tokenSymbol: params.symbol,
       description: params.description,
-      imageUrl: params.imageUrl,
+      imageUrl: finalImageUrl, // Use the extracted imageUrl
       twitterUrl: params.twitter,
       telegramUrl: params.telegram,
       websiteUrl: params.website,

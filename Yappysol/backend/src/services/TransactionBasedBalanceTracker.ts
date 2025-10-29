@@ -184,18 +184,93 @@ export class TransactionBasedBalanceTracker {
 
   /**
    * Get token metadata (price, decimals, etc.)
+   * Priority: token_launches table → TokenMetadataService → Moralis
    */
   private async getTokenMetadata(tokenMint: string, tokenSymbol: string): Promise<any> {
     try {
-      // Get from Helius API
-      const { heliusBalanceService } = await import('../services/HeliusBalanceService');
-      const price = await heliusBalanceService.getTokenPrice(tokenMint);
+      // First, check if this is a token we launched (check token_launches table)
+      const { data: launchData, error: launchError } = await supabase
+        .from('token_launches')
+        .select('token_name, token_symbol, image_url, description')
+        .eq('mint_address', tokenMint)
+        .single();
+
+      if (!launchError && launchData) {
+        logger.info('[BALANCE_TRACKER] Found token in token_launches table', { 
+          tokenMint, 
+          name: launchData.token_name,
+          hasImage: !!launchData.image_url
+        });
+
+        // Get price from Moralis API
+        const { getMoralis } = await import('../lib/moralis');
+        let price = 0;
+        try {
+          const moralis = getMoralis();
+          const priceResponse = await moralis.SolApi.token.getTokenPrice({
+            network: 'mainnet',
+            address: tokenMint
+          });
+          price = priceResponse?.raw?.usdPrice || 0;
+        } catch (priceError) {
+          logger.debug('[BALANCE_TRACKER] Could not get price for launched token from Moralis');
+        }
+
+        return {
+          name: launchData.token_name || tokenSymbol,
+          priceUsd: price,
+          decimals: 9,
+          image: launchData.image_url || null
+        };
+      }
+
+      // Try TokenMetadataService (covers known tokens)
+      const { TokenMetadataService } = await import('./TokenMetadataService');
+      const knownMetadata = TokenMetadataService.getMetadata(tokenMint);
+      if (knownMetadata) {
+        logger.info('[BALANCE_TRACKER] Found token in TokenMetadataService', { tokenMint, symbol: knownMetadata.symbol });
+        
+        // Get price from Moralis
+        const { getMoralis } = await import('../lib/moralis');
+        let price = 0;
+        try {
+          const moralis = getMoralis();
+          const priceResponse = await moralis.SolApi.token.getTokenPrice({
+            network: 'mainnet',
+            address: tokenMint
+          });
+          price = priceResponse?.raw?.usdPrice || TokenMetadataService.getStablecoinPrice(tokenMint);
+        } catch (priceError) {
+          logger.debug('[BALANCE_TRACKER] Could not get price from Moralis');
+        }
+
+        return {
+          name: knownMetadata.name || tokenSymbol,
+          priceUsd: price,
+          decimals: knownMetadata.decimals || 9,
+          image: knownMetadata.image || null
+        };
+      }
+
+      // Fallback to Moralis for price (unknown token)
+      const { getMoralis } = await import('../lib/moralis');
+      let price = 0;
+      try {
+        const moralis = getMoralis();
+        const priceResponse = await moralis.SolApi.token.getTokenPrice({
+          network: 'mainnet',
+          address: tokenMint
+        });
+        price = priceResponse?.raw?.usdPrice || 0;
+      } catch (priceError) {
+        logger.debug('[BALANCE_TRACKER] Could not get price from Moralis for unknown token');
+      }
 
       return {
         name: tokenSymbol,
-        priceUsd: price || 0,
+        priceUsd: price,
         decimals: 9,
-        image: `https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/${tokenMint}/logo.png`
+        image: null
       };
     } catch (error) {
       logger.error('[BALANCE_TRACKER] Error getting token metadata', { error, tokenMint });

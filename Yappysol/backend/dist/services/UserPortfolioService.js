@@ -294,22 +294,42 @@ class UserPortfolioService {
         const priceMap = new Map(prices.map(p => [p.mint, p.price]));
         // 4. Merge and format for frontend
         return await Promise.all(tokens.map(async (token) => {
-            const meta = metadataMap[token.mint] || {};
-            const uri = meta?.onChainMetadata?.metadata?.data?.uri || meta?.offChainMetadata?.metadata?.uri;
-            let image = meta?.onChainMetadata?.metadata?.data?.image ||
-                meta?.offChainMetadata?.metadata?.image ||
-                meta?.legacyMetadata?.logoURI ||
-                '';
-            if (uri)
-                image = await resolveImageUrl(rewriteIpfsUri(uri));
-            // Fallback for SOL if no image found
-            if (token.mint === SOL_MINT && !image) {
-                image = SOL_IMAGE;
+            // FIRST: Check if this is a token we launched (from token_launches table)
+            const { supabase } = await Promise.resolve().then(() => __importStar(require('../lib/supabase')));
+            const { data: launchData } = await supabase
+                .from('token_launches')
+                .select('token_name, token_symbol, image_url')
+                .eq('mint_address', token.mint)
+                .single();
+            let image, symbol, name;
+            if (launchData) {
+                // Use metadata from token_launches for launched tokens
+                image = launchData.image_url || '';
+                symbol = launchData.token_symbol || token.symbol || token.mint.slice(0, 4);
+                name = launchData.token_name || symbol;
             }
-            const symbol = meta?.onChainMetadata?.metadata?.data?.symbol ||
-                meta?.offChainMetadata?.metadata?.symbol ||
-                token.symbol ||
-                token.mint.slice(0, 4);
+            else {
+                // Fallback to Helius metadata for other tokens
+                const meta = metadataMap[token.mint] || {};
+                const uri = meta?.onChainMetadata?.metadata?.data?.uri || meta?.offChainMetadata?.metadata?.uri;
+                image =
+                    meta?.onChainMetadata?.metadata?.data?.image ||
+                        meta?.offChainMetadata?.metadata?.image ||
+                        meta?.legacyMetadata?.logoURI ||
+                        '';
+                if (uri)
+                    image = await resolveImageUrl(rewriteIpfsUri(uri));
+                // Fallback for SOL if no image found
+                if (token.mint === SOL_MINT && !image) {
+                    image = SOL_IMAGE;
+                }
+                symbol =
+                    meta?.onChainMetadata?.metadata?.data?.symbol ||
+                        meta?.offChainMetadata?.metadata?.symbol ||
+                        token.symbol ||
+                        token.mint.slice(0, 4);
+                name = meta?.onChainMetadata?.metadata?.data?.name || meta?.offChainMetadata?.metadata?.name || symbol;
+            }
             const price = priceMap.get(token.mint) || 0;
             let balance;
             if (token.mint === SOL_MINT) {
@@ -324,6 +344,7 @@ class UserPortfolioService {
             const balanceUsd = price && balance ? price * balance : 0;
             return {
                 symbol,
+                name: name || symbol,
                 mint: token.mint,
                 price,
                 image,
