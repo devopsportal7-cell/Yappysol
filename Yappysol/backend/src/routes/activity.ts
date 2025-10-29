@@ -81,6 +81,14 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
       returned: paginatedActivities.length 
     });
 
+    // Set cache headers to prevent browser caching of activity data
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+
     res.json({
       activities: paginatedActivities,
       total: activities.length,
