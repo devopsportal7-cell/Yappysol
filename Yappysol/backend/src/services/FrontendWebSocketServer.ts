@@ -279,7 +279,7 @@ export class FrontendWebSocketServer {
    * Setup event listeners for backend events
    */
   private setupEventListeners(): void {
-    // Listen for wallet update events from the backend
+    // Listen for wallet update events from the backend (from FrontendWebSocketServer's own emitter)
     this.eventEmitter.on('wallet-updated', (data) => {
       this.broadcastPortfolioUpdate(data.wallet, data.portfolio);
     });
@@ -291,6 +291,64 @@ export class FrontendWebSocketServer {
     this.eventEmitter.on('transaction-detected', (data) => {
       this.broadcastTransactionUpdate(data.wallet, data.transaction);
     });
+
+    // Bridge events from events.ts bus to WebSocket server
+    // This ensures emitWalletUpdated() from ExternalTransactionService triggers WebSocket broadcasts
+    try {
+      const { getEventBus } = require('../lib/events');
+      const bus = getEventBus();
+      
+      bus.on('wallet-updated', (payload: any) => {
+        // When emitWalletUpdated is called, trigger portfolio refresh notification
+        // The actual portfolio data will be fetched when frontend calls /api/portfolio/:address
+        // But we notify the frontend that a refresh is needed
+        logger.info('[Frontend WS] Wallet updated event from events.ts bus', {
+          wallet: payload.wallet,
+          reason: payload.reason
+        });
+        
+        // Broadcast balance update event to trigger frontend refetch
+        // Frontend will then fetch fresh data from /api/portfolio/:address
+        const message: FrontendWebSocketMessage = {
+          type: 'balance_update',
+          walletAddress: payload.wallet,
+          data: {
+            reason: payload.reason,
+            updatedAt: payload.updatedAt,
+            totals: payload.totals,
+            transactionHash: payload.transactionHash,
+            metadata: payload.metadata
+          },
+          timestamp: payload.updatedAt || new Date().toISOString()
+        };
+
+        let sentCount = 0;
+        for (const [clientId, client] of this.clients) {
+          if (client.readyState === WebSocket.OPEN) {
+            const subscribedWallets = (client as any).subscribedWallets || new Set();
+            if (subscribedWallets.has(payload.wallet)) {
+              try {
+                client.send(JSON.stringify(message));
+                sentCount++;
+              } catch (error) {
+                logger.error('[Frontend WS] Failed to broadcast to client', { clientId, error });
+                this.clients.delete(clientId);
+              }
+            }
+          }
+        }
+
+        logger.info('[Frontend WS] Balance update event broadcasted from events.ts', {
+          wallet: payload.wallet,
+          sentToClients: sentCount,
+          reason: payload.reason
+        });
+      });
+      
+      logger.info('[Frontend WS] Connected to events.ts bus for wallet updates');
+    } catch (error) {
+      logger.error('[Frontend WS] Failed to connect to events.ts bus', { error });
+    }
   }
 
   /**
