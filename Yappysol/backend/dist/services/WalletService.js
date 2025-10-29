@@ -120,13 +120,15 @@ class WalletService {
         const networkFee = baseNetworkFee;
         const totalFee = networkFee + priorityFee;
         // For token creation, add additional fees
+        // Pump.fun requires ~0.015 SOL for dev buy + fees + rent exemption
         if (transactionType === 'token-creation') {
-            const creationFee = 0.002; // Additional fee for token creation
+            // Safety buffer: token creation needs minimum 0.01 SOL for dev buy + ~0.005 for fees/rent
+            const creationFee = Math.max(0.01 + 0.005, amount + 0.005); // Extra 0.005 SOL buffer for rent and fees
             return {
-                networkFee: networkFee + creationFee,
+                networkFee: networkFee + 0.002, // Base network fee
                 priorityFee,
-                totalFee: totalFee + creationFee,
-                estimatedCost: amount + totalFee + creationFee
+                totalFee: totalFee + 0.002,
+                estimatedCost: creationFee // Use higher of minimum or requested amount + buffer
             };
         }
         return {

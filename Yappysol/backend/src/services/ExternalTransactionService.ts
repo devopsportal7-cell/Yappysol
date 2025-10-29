@@ -498,6 +498,15 @@ export class ExternalTransactionService {
       if (solIncrease > 0) {
         // SOL transaction
         const amount = solIncrease / 1e9; // Convert lamports to SOL
+        
+        // Filter out dust transactions (rent exemption refunds, tiny system transactions)
+        // Only log transactions with meaningful amounts (>= 0.00001 SOL)
+        const MIN_SIGNIFICANT_AMOUNT = 0.00001;
+        if (amount < MIN_SIGNIFICANT_AMOUNT) {
+          logger.debug(`[EXTERNAL_TX] Skipping dust transaction: ${amount} SOL`);
+          return null;
+        }
+        
         const solscanUrl = `https://solscan.io/tx/${tx.signature}`;
 
         return {

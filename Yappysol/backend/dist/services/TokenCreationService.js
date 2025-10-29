@@ -962,12 +962,50 @@ class TokenCreationService {
                     if (!signature) {
                         throw new Error('Failed to obtain transaction signature after retries');
                     }
+                    // Wait for transaction confirmation and check if it succeeded
+                    console.log('[DEBUG] Waiting for transaction confirmation...');
+                    let confirmed = false;
+                    let transactionFailed = false;
+                    let failureReason = '';
+                    let retries = 10; // Wait up to 10 seconds
+                    while (retries > 0 && !confirmed) {
+                        try {
+                            const status = await connection.getSignatureStatus(signature);
+                            if (status?.value) {
+                                if (status.value.err) {
+                                    transactionFailed = true;
+                                    failureReason = JSON.stringify(status.value.err);
+                                    console.error('[DEBUG] Transaction failed on-chain:', status.value.err);
+                                    break;
+                                }
+                                if (status.value.confirmationStatus) {
+                                    confirmed = true;
+                                    console.log('[DEBUG] Transaction confirmed successfully:', signature);
+                                    break;
+                                }
+                            }
+                        }
+                        catch (error) {
+                            // Continue waiting
+                            console.log(`[DEBUG] Waiting for confirmation, retries left: ${retries}`);
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        retries--;
+                    }
+                    // Check transaction status
+                    if (transactionFailed) {
+                        throw new Error(`Transaction failed on-chain: ${failureReason}`);
+                    }
+                    if (!confirmed) {
+                        console.warn('[DEBUG] Transaction signature submitted but not yet confirmed:', signature);
+                        // Still continue - transaction might be confirmed later
+                    }
                     // Update launch record with success
                     try {
                         await TokenLaunchSupabase_1.TokenLaunchModel.updateLaunch(launchRecord.id, {
                             mintAddress: mintKeypair.publicKey.toBase58(), // Store mint address
                             transactionSignature: signature,
-                            status: 'completed'
+                            status: confirmed ? 'completed' : 'pending'
                         });
                     }
                     catch (updateError) {
