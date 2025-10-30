@@ -4,6 +4,7 @@ import chatRoutes from './routes/chat';
 import tokenRoutes from './routes/token';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
+import adminRoutes from './routes/admin';
 import userManagementRoutes from './routes/userManagement';
 import tokenLaunchesRoutes from './routes/tokenLaunches';
 import n8nRoutes from './routes/n8n';
@@ -59,6 +60,7 @@ app.use(cors({
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/user', userManagementRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/chat', tokenLaunchesRoutes);
 app.use('/api/n8n', n8nRoutes);
 app.use('/api/n8n', n8nS2SRoutes);

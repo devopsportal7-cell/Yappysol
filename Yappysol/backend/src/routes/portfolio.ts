@@ -34,6 +34,46 @@ router.get('/:walletAddress', async (req, res) => {
         totalUsdValue: cachedPortfolio.totalUsdValue 
       });
       
+      // Ensure YAPPY token is always included in cached portfolio
+      const YAPPY_MINT = 'GHj3uUmLTUWwsdLFWSAgqYVk6j3qbfmKuQp98Ys9pump';
+      const hasYappy = cachedPortfolio.tokens?.some((t: any) => t.mint === YAPPY_MINT);
+      
+      if (!hasYappy && cachedPortfolio.tokens) {
+        // Get YAPPY price from Moralis
+        let yappyPriceUsd = 0;
+        try {
+          const { getMoralis } = await import('../lib/moralis');
+          const moralis = getMoralis();
+          const priceResponse = await moralis.SolApi.token.getTokenPrice({
+            network: 'mainnet',
+            address: YAPPY_MINT
+          });
+          yappyPriceUsd = priceResponse?.raw?.usdPrice || 0;
+        } catch (error) {
+          logger.warn('[Portfolio Route] Could not fetch YAPPY price for cached portfolio', { error });
+        }
+        
+        // Add YAPPY token to cached portfolio
+        cachedPortfolio.tokens.push({
+          mint: YAPPY_MINT,
+          symbol: 'YAPPY',
+          name: 'Yappy',
+          accountUnit: YAPPY_MINT,
+          uiAmount: 0,
+          priceUsd: yappyPriceUsd,
+          solEquivalent: 0,
+          usdEquivalent: 0,
+          image: '', // Will be provided later
+          solscanUrl: `https://solscan.io/token/${YAPPY_MINT}`,
+          decimals: 9
+        });
+        
+        logger.info('[Portfolio Route] Added YAPPY token to cached portfolio', { 
+          mint: YAPPY_MINT, 
+          priceUsd: yappyPriceUsd 
+        });
+      }
+      
       // Send cached portfolio to frontend WebSocket clients (non-blocking)
       Promise.resolve().then(async () => {
         try {
@@ -106,10 +146,24 @@ router.get('/:walletAddress', async (req, res) => {
         'Pragma': 'no-cache',
         'Expires': '0'
       });
+      // Always include YAPPY token even in empty portfolio
+      const YAPPY_MINT = 'GHj3uUmLTUWwsdLFWSAgqYVk6j3qbfmKuQp98Ys9pump';
       res.json({
         totalSolValue: 0,
         totalUsdValue: 0,
-        tokens: []
+        tokens: [{
+          mint: YAPPY_MINT,
+          symbol: 'YAPPY',
+          name: 'Yappy',
+          accountUnit: YAPPY_MINT,
+          uiAmount: 0,
+          priceUsd: 0,
+          solEquivalent: 0,
+          usdEquivalent: 0,
+          image: '', // Will be provided later
+          solscanUrl: `https://solscan.io/token/${YAPPY_MINT}`,
+          decimals: 9
+        }]
       });
     }
   } catch (e: any) {

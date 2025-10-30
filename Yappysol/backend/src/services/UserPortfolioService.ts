@@ -338,6 +338,50 @@ export class UserPortfolioService {
         balance,
         balanceUsd
       };
-    })).then(arr => arr.filter(t => t.price > 0 || t.symbol === 'SOL'));
+    })).then(async (arr) => {
+      // Filter tokens but keep SOL and YAPPY always
+      const filtered = arr.filter(t => t.price > 0 || t.symbol === 'SOL');
+      
+      // Always include YAPPY token for all users (even if balance is 0)
+      const YAPPY_MINT = 'GHj3uUmLTUWwsdLFWSAgqYVk6j3qbfmKuQp98Ys9pump';
+      const YAPPY_SYMBOL = 'YAPPY';
+      const YAPPY_NAME = 'Yappy';
+      
+      // Check if user already has YAPPY in their portfolio
+      const hasYappy = filtered.some(t => t.mint === YAPPY_MINT);
+      
+      if (!hasYappy) {
+        // Get YAPPY price from Moralis
+        let yappyPrice = 0;
+        try {
+          const priceResponse = await moralis.SolApi.token.getTokenPrice({
+            network: 'mainnet',
+            address: YAPPY_MINT
+          });
+          yappyPrice = priceResponse?.raw?.usdPrice || 0;
+        } catch (error) {
+          console.warn('[PORTFOLIO] Could not fetch YAPPY price', error);
+        }
+        
+        // Add YAPPY token with 0 balance (user doesn't hold it yet)
+        filtered.push({
+          symbol: YAPPY_SYMBOL,
+          name: YAPPY_NAME,
+          mint: YAPPY_MINT,
+          price: yappyPrice,
+          image: '', // Will be provided later
+          solscanUrl: `https://solscan.io/token/${YAPPY_MINT}`,
+          balance: 0,
+          balanceUsd: 0
+        });
+        
+        console.log('[PORTFOLIO] Added YAPPY token to portfolio', { 
+          mint: YAPPY_MINT, 
+          price: yappyPrice 
+        });
+      }
+      
+      return filtered;
+    });
   }
 } 

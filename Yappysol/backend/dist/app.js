@@ -42,6 +42,7 @@ const chat_1 = __importDefault(require("./routes/chat"));
 const token_1 = __importDefault(require("./routes/token"));
 const auth_1 = __importDefault(require("./routes/auth"));
 const user_1 = __importDefault(require("./routes/user"));
+const admin_1 = __importDefault(require("./routes/admin"));
 const userManagement_1 = __importDefault(require("./routes/userManagement"));
 const tokenLaunches_1 = __importDefault(require("./routes/tokenLaunches"));
 const n8n_1 = __importDefault(require("./routes/n8n"));
@@ -91,6 +92,7 @@ app.use((0, cors_1.default)({
 app.use('/api/auth', auth_1.default);
 app.use('/api/user', user_1.default);
 app.use('/api/user', userManagement_1.default);
+app.use('/api/admin', admin_1.default);
 app.use('/api/chat', tokenLaunches_1.default);
 app.use('/api/n8n', n8n_1.default);
 app.use('/api/n8n', n8n_s2s_1.default);

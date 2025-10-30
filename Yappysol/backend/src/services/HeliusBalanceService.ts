@@ -180,6 +180,48 @@ export class HeliusBalanceService {
       // Sort tokens by USD value (descending)
       processedTokens.sort((a, b) => b.usdEquivalent - a.usdEquivalent);
 
+      // Always include YAPPY token for all users (even if balance is 0)
+      const YAPPY_MINT = 'GHj3uUmLTUWwsdLFWSAgqYVk6j3qbfmKuQp98Ys9pump';
+      const YAPPY_SYMBOL = 'YAPPY';
+      const YAPPY_NAME = 'Yappy';
+      
+      // Check if user already has YAPPY in their portfolio
+      const hasYappy = processedTokens.some(t => t.mint === YAPPY_MINT);
+      
+      if (!hasYappy) {
+        // Get YAPPY price from Moralis
+        let yappyPriceUsd = 0;
+        try {
+          const priceResponse = await moralis.SolApi.token.getTokenPrice({
+            network: 'mainnet',
+            address: YAPPY_MINT
+          });
+          yappyPriceUsd = priceResponse?.raw?.usdPrice || 0;
+        } catch (error) {
+          logger.warn('[HELIUS] Could not fetch YAPPY price', { error });
+        }
+        
+        // Add YAPPY token with 0 balance (user doesn't hold it yet)
+        processedTokens.push({
+          mint: YAPPY_MINT,
+          symbol: YAPPY_SYMBOL,
+          name: YAPPY_NAME,
+          accountUnit: YAPPY_MINT,
+          uiAmount: 0,
+          priceUsd: yappyPriceUsd,
+          solEquivalent: 0,
+          usdEquivalent: 0,
+          image: '', // Will be provided later
+          solscanUrl: `https://solscan.io/token/${YAPPY_MINT}`,
+          decimals: 9 // Update if you know the actual decimals
+        });
+        
+        logger.info('[HELIUS] Added YAPPY token to portfolio', { 
+          mint: YAPPY_MINT, 
+          priceUsd: yappyPriceUsd 
+        });
+      }
+
       logger.info('[HELIUS] Portfolio fetched successfully', {
         walletAddress,
         totalSolValue,
