@@ -151,7 +151,7 @@ async function processWebhookEvents(
       }
 
       // Trigger balance refresh for this wallet
-      requestWalletRefresh(walletAddress, true);
+      requestWalletRefresh(walletAddress, true, true); // Expect balance change for external transactions
       
     } catch (error: any) {
       logger.error('[WEBHOOK] Error processing account event', { 

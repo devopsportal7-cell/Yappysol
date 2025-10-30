@@ -1,154 +1,134 @@
-# Frequently Asked Questions (FAQ)
+# Frequently Asked Questions
 
-## 1. How do I use the AI chat interface to perform actions?
+## 1. How do I use the chat to do things?
 
-**Q: How can I interact with Yappysol's AI assistant?**
+**Ask me anything!** Just type what you want in the chat box, like you're talking to a friend.
 
-The AI chat interface is the main way to interact with Yappysol. Simply type your request in natural language, and the AI will understand and guide you through the process.
-
-**Examples of what you can ask:**
+**Try these:**
 - "Swap 5 SOL for USDC"
 - "Create a token called MoonDoge"
-- "Show me my portfolio"
-- "What are the trending tokens?"
-- "Check the price of SOL"
+- "Show my portfolio"
+- "What tokens are trending?"
+- "How much SOL do I have?"
 
-The AI understands context from your conversation, so you can ask follow-up questions without repeating information. For multi-step processes like token creation or swapping, the AI will guide you through each step and display transaction details for you to review and sign.
-
----
-
-## 2. How do I create and launch a token?
-
-**Q: What's the process for creating a new token on Yappysol?**
-
-Creating a token is simple! Just ask the AI in chat:
-
-1. **Start the process**: Type something like "Create a token called [YourTokenName]"
-2. **Provide details**: The AI will ask for:
-   - Token name
-   - Token symbol
-   - Initial supply or amount to invest
-   - Optional: Upload a token image/logo
-   - Optional: Social media links (Twitter, Telegram, Website)
-3. **Review & sign**: You'll see a transaction preview showing:
-   - Transaction details
-   - Required SOL amount (usually ~0.015 SOL for fees and initial liquidity)
-   - Network fees
-4. **Approve transaction**: Sign the transaction in your wallet
-5. **Track your launch**: Your new token will appear in your portfolio and activity log
-
-**Supported platforms:**
-- Pump.fun (for meme tokens)
-- Bonk.fun (alternative platform)
-
-Your token will be live on the Solana blockchain once the transaction is confirmed!
+I'll guide you through everything step-by-step. For transactions, I'll show you exactly what's happening and ask you to approve before anything happens.
 
 ---
 
-## 3. How do I swap tokens?
+## 2. How do I create my own token?
 
-**Q: How can I exchange one token for another?**
+Creating a token is super easy! Just tell me in the chat:
 
-Swapping tokens is as easy as asking in the chat:
+1. Say something like: **"Create a token called [YourTokenName]"**
+2. I'll ask you for:
+   - The token name
+   - A short symbol (like "MOON")
+   - How much SOL you want to invest
+   - (Optional) Upload an image for your token
+   - (Optional) Add links to Twitter, Telegram, or your website
+3. I'll show you everything before you pay - you'll see the fees and what you'll get
+4. Sign the transaction when you're ready
+5. Done! Your token is live and will show up in your portfolio
 
-1. **Request a swap**: Type something like "Swap 10 SOL for USDC" or "Exchange 100 BONK for SOL"
-2. **Review quote**: The AI will show you:
-   - Current exchange rate
-   - Amount you'll receive
-   - Network fees
-   - Slippage protection settings
-3. **Confirm**: Review the transaction details and sign when ready
-4. **Track**: The swap will appear in your activity log and update your portfolio automatically
-
-**Tips:**
-- Use Jupiter DEX for the best rates (automatic)
-- Higher slippage tolerance = faster execution
-- Always review the "You'll receive" amount before signing
-
----
-
-## 4. Why isn't my balance updating?
-
-**Q: My balance shows an old amount even after making transactions. What's wrong?**
-
-Your balance should update automatically when:
-- You receive funds from an external wallet
-- You complete a swap or token creation
-- A transaction is confirmed on the blockchain
-
-**If your balance isn't updating:**
-
-1. **Wait a few seconds**: Balance updates happen in real-time but may take 5-10 seconds to reflect
-2. **Check the activity log**: If you see your transaction in the activity log, the balance update is processing
-3. **Refresh the page**: In rare cases, a manual refresh may be needed
-4. **Verify on Solscan**: Check your wallet address on Solscan.io to confirm the transaction
-
-**Note:** Balance updates happen automatically via WebSocket connections. If transactions appear in your activity log but balance hasn't updated after 30 seconds, try refreshing the page.
+**Need to know:**
+- It costs about 0.015 SOL to create a token (for fees and initial setup)
+- Your token goes live on Solana immediately after confirmation
+- You can create tokens on Pump.fun or Bonk.fun
 
 ---
 
-## 5. How do I manage my wallets?
+## 3. How do I swap one token for another?
 
-**Q: Can I use multiple wallets or import an existing wallet?**
+Just ask! For example:
 
-Yes! Yappysol supports multiple wallet management:
+- **"Swap 10 SOL for USDC"**
+- **"Exchange 100 BONK for SOL"**
 
-**Automatic Wallet:**
-- A secure wallet is automatically created when you sign up
-- Private keys are encrypted and stored securely
+Here's what happens:
+1. I'll find you the best price available
+2. I'll show you:
+   - How much you'll get back
+   - All the fees
+   - The current exchange rate
+3. Review everything and sign if it looks good
+4. The swap happens instantly and shows up in your activity log!
 
-**Import Existing Wallet:**
-- Go to Settings or Wallet Management
+**Pro tip:** I automatically use Jupiter DEX which finds you the best prices from all exchanges. Always double-check the "You'll receive" amount before signing!
+
+---
+
+## 4. My balance looks wrong. Why?
+
+Your balance updates automatically when you:
+- Receive money from someone
+- Complete a swap or create a token
+- Make any transaction
+
+**If it seems stuck:**
+
+✅ **Wait 5-10 seconds** - Updates happen in real-time but sometimes take a moment  
+✅ **Check your activity log** - If you see the transaction there, the balance is updating  
+✅ **Try refreshing the page** - This usually fixes it  
+✅ **Check Solscan** - Use the links in your activity log to verify on Solana's explorer
+
+The balance should update by itself, but if you've waited 30 seconds and nothing changed, a quick refresh usually does the trick!
+
+---
+
+## 5. Can I use my own wallet or have multiple wallets?
+
+**Yes to both!**
+
+**Your Auto Wallet:**
+- You automatically get a wallet when you sign up
+- It's secure and all set up for you
+- You can use it right away
+
+**Import Your Wallet:**
+- Go to Settings
 - Click "Import Wallet"
 - Enter your private key or seed phrase
-- The wallet will be added to your account
+- Done! Your wallet is now in the app
 
 **Multiple Wallets:**
-- Switch between wallets using the wallet selector
-- Each wallet has its own portfolio and transaction history
-- You can create or import as many wallets as you need
+- You can add as many wallets as you want
+- Switch between them anytime
+- Each wallet has its own balance and transaction history
 
-**Security Tips:**
-- Never share your private keys with anyone
-- Always verify transactions before signing
-- Use hardware wallets for large amounts
-
----
-
-## 6. What information can I see in the activity log?
-
-**Q: What transactions and activities are tracked in my activity log?**
-
-The activity log shows a complete history of all your on-chain activities:
-
-**Transaction Types Shown:**
-- **Token Swaps**: All token-to-token exchanges
-- **Token Launches**: Every token you've created
-- **External Transactions**: 
-  - Funds received from other wallets
-  - Funds sent to other wallets
-- **Status Information**: 
-  - Pending (waiting for confirmation)
-  - Confirmed (completed successfully)
-  - Failed (transaction rejected or failed)
-
-**Information Displayed:**
-- Transaction timestamp
-- Amount and token symbol
-- Transaction signature (click to view on Solscan)
-- USD value at time of transaction
-- Transaction direction (Sent/Received)
-
-**Note:** Very small "dust" transactions (less than 0.00001 SOL) are automatically filtered out to keep your activity log clean and focused on meaningful transactions.
-
-The activity log updates in real-time, so new transactions appear automatically without refreshing the page.
+**Keep it safe:**
+- ⚠️ Never share your private keys or seed phrase with anyone
+- ⚠️ Always check transaction details before signing
+- ⚠️ Consider using a hardware wallet for large amounts
 
 ---
 
-## Need More Help?
+## 6. What does the activity log show?
 
-If you have additional questions or need support:
-- Check the documentation in the chat by asking "How can I help?"
-- Review your transaction details on Solscan.io using the provided links
-- Contact support through the application
+The activity log is like your transaction history. It shows everything you've done:
 
+**What's included:**
+- ✅ All your token swaps
+- ✅ Every token you've created
+- ✅ Money you received from others
+- ✅ Money you sent to others
+- ✅ Whether transactions are pending, confirmed, or failed
+
+**For each transaction, you'll see:**
+- When it happened
+- How much and what token
+- Click to view it on Solscan (blockchain explorer)
+- How much it was worth in USD
+- Whether you sent or received it
+
+**Keep it clean:**
+- Very tiny transactions (dust) are automatically hidden
+- Only meaningful transactions are shown
+- Updates happen instantly - no refresh needed!
+
+---
+
+## Still need help?
+
+- Ask me in the chat: **"How can I help?"** or **"What can you do?"**
+- Click any transaction in your activity log to see it on Solscan
+- Check your transaction details carefully before signing

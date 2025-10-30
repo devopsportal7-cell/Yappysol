@@ -56,8 +56,9 @@ export class WebsocketBalanceSubscriber {
         logger.info('[WSS] ✅ External transaction check completed');
         
         // Trigger immediate balance refresh from Helius and update cache
+        // Pass expectBalanceChange=true to retry until balance actually changes
         const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
-        requestWalletRefresh(walletAddress, true); // Immediate refresh
+        requestWalletRefresh(walletAddress, true, true); // Immediate refresh, expect balance change
         
         // Notify frontend WebSocket clients
         const { frontendWebSocketServer } = await import('./FrontendWebSocketServer');
@@ -103,7 +104,7 @@ export class WebsocketBalanceSubscriber {
         // This is a broad refresh - in production you might want to be more specific
         const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
         for (const wallet of this.subscribedWallets) {
-          requestWalletRefresh(wallet, true);
+          requestWalletRefresh(wallet, true, true); // Expect balance change for external transactions
         }
         
       } else {

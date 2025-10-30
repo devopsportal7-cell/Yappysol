@@ -239,9 +239,10 @@ export class ExternalTransactionService {
       });
 
       // Trigger balance update for recipient wallet
+      // Pass expectBalanceChange=true to retry until balance actually changes
       if (transaction.recipient) {
         const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
-        requestWalletRefresh(transaction.recipient, true);
+        requestWalletRefresh(transaction.recipient, true, true); // Immediate refresh, expect balance change
 
         // Emit SSE event for instant UI update
         const { emitWalletUpdated } = await import('../lib/events');
@@ -251,6 +252,12 @@ export class ExternalTransactionService {
           tokenSymbol: transaction.tokenSymbol,
           valueUsd: transaction.valueUsd
         });
+      }
+      
+      // Also trigger for sender wallet (for debit transactions)
+      if (transaction.sender) {
+        const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+        requestWalletRefresh(transaction.sender, true, true); // Immediate refresh, expect balance change
       }
     } catch (error) {
       logger.error('[EXTERNAL_TX] Error storing webhook transaction', { error, transaction });
@@ -317,9 +324,10 @@ export class ExternalTransactionService {
       });
 
       // Trigger balance update for recipient wallet
+      // Pass expectBalanceChange=true to retry until balance actually changes
       if (transaction.recipient) {
         const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
-        requestWalletRefresh(transaction.recipient, true); // Immediate refresh
+        requestWalletRefresh(transaction.recipient, true, true); // Immediate refresh, expect balance change
 
         // Emit SSE event for instant UI update
         const { emitWalletUpdated } = await import('../lib/events');
@@ -329,6 +337,12 @@ export class ExternalTransactionService {
           tokenSymbol: transaction.tokenSymbol,
           valueUsd: transaction.valueUsd
         });
+      }
+      
+      // Also trigger for sender wallet (for debit transactions)
+      if (transaction.sender) {
+        const { requestWalletRefresh } = await import('../lib/portfolio-refresh');
+        requestWalletRefresh(transaction.sender, true, true); // Immediate refresh, expect balance change
       }
     } catch (error) {
       logger.error('[EXTERNAL_TX] Error storing external transaction', { error, transaction });
